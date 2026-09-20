@@ -1,3 +1,4 @@
+# PunchTrak — Copyright 2026 Nicolas. Licensed under the Apache License 2.0.
 # PunchTrak calendar_sync.py
 # v2026.9.01
 import os

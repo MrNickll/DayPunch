@@ -1,3 +1,4 @@
+# PunchTrak — Copyright 2026 Nicolas. Licensed under the Apache License 2.0.
 # PunchTrak server.py
 from flask import Flask, jsonify, request, send_from_directory
 from openpyxl import load_workbook

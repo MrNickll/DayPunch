@@ -129,7 +129,7 @@ function main(src) {
   api.punches = [W];
   check('otherwise the sheet date wins', api.currentDayDate(), '2026-09-02');
 
-  out.push('\nreadForm / CDK');
+  out.push('\nreadForm / copy text');
   fields['f-time'] = '09:15'; fields['f-status'] = 'DW';
   fields['f-ro'] = ' 295204 '; fields['f-line'] = ' b ';
   fields['f-desc'] = ' Airbag Light On '; fields['f-opcode'] = ' SA-99 ';
@@ -141,7 +141,7 @@ function main(src) {
   check('carries line (switchTab used to drop it)', 'line' in f, true);
   check('carries odometer (switchTab used to drop it)', f.odometer, '22399');
   api.punches = [W];
-  check('CDK text is built from the same reader', api.buildCopyTextFromForm(),
+  check('copy text is built from the same reader', api.buildCopyTextFromForm(),
         '2026-09-02, 09:15 - DW, SA-99 - Airbag Light On - Ticket: 200092889\nScanned for faults.');
 
   // The poll used to compute formDirty as `value !== '' && editingRow === null`.
@@ -172,7 +172,7 @@ function main(src) {
   api.clearForm();
   check('clearing the form clears dirty', api.formDirty, false);
   var warrantyEl = document._els['f-warranty'];
-  check('the warranty checkbox is wired too (CDK used to go stale)',
+  check('the warranty checkbox is wired too (the preview used to go stale)',
         warrantyEl._bag.count('change') > 0, true);
 
   // Handler accumulation: initResumeRoPicker() used to run on every resume.
@@ -268,8 +268,14 @@ if (typeof require !== 'undefined' && typeof module !== 'undefined') {
   // PUNCHTRAK_APP_JS lets the same harness run against another copy of app.js,
   // which is how the fixes are A/B'd against the code they replaced.
   var override = $.NSProcessInfo.processInfo.environment.objectForKey('PUNCHTRAK_APP_JS');
-  var target = override.js ? override.js
-    : '/Users/nicolas/Documents/GitHub/PunchTrak/src/app.js';
+  var fm = $.NSFileManager.defaultManager;
+  var cwd = fm.currentDirectoryPath.js;
+  // Run from the repo root or from tests/ — resolve either way rather than
+  // baking in one machine's absolute path.
+  var candidates = [cwd + '/src/app.js', cwd + '/../src/app.js'];
+  var target = override.js || candidates.filter(function (c) {
+    return fm.fileExistsAtPath(c);
+  })[0] || candidates[0];
   var p = $.NSString.stringWithContentsOfFileEncodingError(
     target, $.NSUTF8StringEncoding, null).js;
   var r = main(p);

@@ -145,11 +145,13 @@ status = client.get("/api/dbstatus").get_json()
 check("/api/dbstatus reports a healthy database", status["db_ok"], True)
 
 print("\nFresh install")
-check("the seed is Tools only",
-      sorted({n["category"] for n in client.get("/api/refnotes").get_json()}), ["Tools"])
-check("no reference data mentions a vehicle brand",
-      any(w in str(client.get("/api/refnotes").get_json()).lower()
-          for w in ["bentley", "aston", "bentayga", "dbx"]), False)
+seeded = client.get("/api/refnotes").get_json()
+check("the seed is Tools only", sorted({n["category"] for n in seeded}), ["Tools"])
+# Stronger than scanning for forbidden words: the seed must be exactly what
+# config declares and nothing else, whatever anyone adds there later.
+check("the seed is exactly what config declares",
+      sorted((n["category"], n["key"], n["value"], n["tags"]) for n in seeded),
+      sorted(config.SEED_REF_NOTES))
 settings = client.get("/api/settings").get_json()
 check("labels come from settings, not the markup", settings["labels"]["ref_id"], "Ticket Number")
 check("  ...and the copy tab is neutral", settings["labels"]["copy_tab"], "TEXT")

@@ -1,5 +1,7 @@
 # PunchTrak
 
+Licensed under the Apache License 2.0 — see `LICENSE`.
+
 A single-user tool for a technician to log how a working day was spent: a
 sequence of time punches, each with a job number, a description, and notes.
 It writes one spreadsheet per day and keeps a small reference library of
@@ -7,9 +9,10 @@ op-codes, notes and reusable text snippets.
 
 ## What it is
 
-- A local web page served by a small Python process on `127.0.0.1`, displayed
-  in a desktop window.
-- Nothing listens on the network. Nothing is sent anywhere.
+- A local web page served by a small Python process, displayed in a desktop
+  window.
+- The process listens on the loopback interface (`127.0.0.1`) only. It is not
+  reachable from another machine, and it makes no outbound connections.
 
 ## What it touches
 

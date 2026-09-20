@@ -1,3 +1,4 @@
+# PunchTrak — Copyright 2026 Nicolas. Licensed under the Apache License 2.0.
 # PunchTrak daily_file.py
 import os
 import glob
