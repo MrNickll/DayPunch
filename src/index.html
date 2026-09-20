@@ -1,0 +1,331 @@
+<!-- PunchTrak index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PunchTrak</title>
+  <link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <img class="brand-mark" src="assets/logo.svg" alt=""
+           onerror="this.style.display='none'" />
+      <div class="logo">PUNCHTRAK</div>
+    </div>
+    <div class="file-badge" id="fileBadge">loading…</div>
+    <select class="file-picker" id="filePicker" onchange="loadFile(this.value)" title="Load a different day"></select>
+    <div class="header-spacer"></div>
+    <div class="active-pill" id="activePill">
+      <div class="dot"></div>
+      <span id="activePillText">RO — Line</span>
+    </div>
+  </header>
+
+  <div class="main">
+
+    <!-- Punch list -->
+    <div class="punch-list" id="punchList" onclick="if(event.target===this||event.target.id==='punchCards'||event.target.id==='punchListLabel')deselectPunch()">
+      <div id="priorDayBanner" style="display:none;background:var(--tint-orange);border:1px solid var(--orange);border-radius:6px;padding:8px 12px;font-family:var(--mono);font-size:11px;color:var(--orange);margin-bottom:4px"></div>
+      <div class="section-label" id="punchListLabel">TODAY'S PUNCHES</div>
+
+      <!-- New punch launcher -->
+      <div class="new-punch-launcher" id="newPunchLauncher">
+        <button class="btn-new-punch" id="btnNewPunch" onclick="togglePunchLauncher()">＋ New Punch</button>
+        <div class="punch-type-picker" id="punchTypePicker">
+          <button class="btn-type btn-type-w"  onclick="launchPunch('W')">W<span>Working</span></button>
+          <button class="btn-type btn-type-dw" onclick="launchPunch('DW')">DW<span>Diagnostic</span></button>
+          <button class="btn-type btn-type-wi" onclick="launchPunch('WI')">WI<span>Indirect</span></button>
+          <div class="punch-type-divider"></div>
+          <button class="btn-type btn-type-a"  onclick="launchPunch('A')">A<span>Available</span></button>
+          <button class="btn-type btn-type-b"  onclick="launchPunch('B')">B<span>Lunch</span></button>
+          <button class="btn-type btn-type-c"  onclick="launchPunch('C')">C<span>Home</span></button>
+        </div>
+      </div>
+
+      <div id="punchCards"></div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-tabs">
+        <div class="sidebar-tab active" onclick="switchTab('form')" id="tab-form">ENTRY</div>
+        <div class="sidebar-tab" onclick="switchTab('copy')"  id="tab-copy" data-label="copy_tab">TEXT</div>
+        <div class="sidebar-tab" onclick="switchTab('ref')"  id="tab-ref">REF</div>
+        <div class="sidebar-tab" onclick="switchTab('calc')" id="tab-calc">CALC</div>
+      </div>
+
+      <!-- Entry panel -->
+      <div class="sidebar-panel active" id="panel-form">
+
+        <!-- Resume banner -->
+        <div class="resume-banner" id="resumeBanner" style="display:none">
+          <div class="resume-banner-text">
+            <span class="resume-icon">↩</span>
+            <span>RO <span class="resume-ro-picker" id="resumeRoNumber">—</span></span>
+            <span id="resumeBannerDetail" style="margin-left:8px"></span>
+          </div>
+          <div class="resume-banner-actions">
+            <button class="btn-resume-yes" onclick="confirmResume()">Resume</button>
+            <button class="btn-resume-no"  onclick="declineResume()">Fresh</button>
+          </div>
+        </div>
+
+        <div class="punch-form" id="punchForm">
+          <div class="form-row">
+            <div class="form-group" style="max-width:115px">
+              <div class="form-label">Time</div>
+              <input class="form-input" id="f-time" type="time" />
+            </div>
+            <div class="form-group" style="max-width:130px">
+              <div class="form-label">Status</div>
+              <select class="form-select" id="f-status">
+                <option value="W">W — Working</option>
+                <option value="DW">DW — Diagnostic</option>
+                <option value="WI">WI — Indirect</option>
+                <option value="A">A — Available</option>
+                <option value="B">B — Break</option>
+                <option value="C">C — Clocked Out</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <div class="form-label" data-label="job_number">Job #</div>
+              <input class="form-input" id="f-ro" type="number" placeholder="Job number" />
+            </div>
+            <div class="form-group" style="max-width:70px">
+              <div class="form-label" data-label="job_line">Line</div>
+              <input class="form-input" id="f-line" type="text" maxlength="2" placeholder="A" style="text-transform:uppercase" />
+            </div>
+          </div>
+
+          <!-- Bidirectional OP-code lookup -->
+          <div class="form-group">
+            <div class="form-label">Description</div>
+            <div class="opcode-wrap">
+              <input class="form-input" id="f-desc" type="text" placeholder="Type description or OP-code…" autocomplete="off" />
+              <div class="opcode-dropdown" id="opcodeDropdown"></div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label">OP-Code</div>
+            <div class="opcode-wrap">
+              <input class="form-input" id="f-opcode" type="text" placeholder="Auto-filled or type…" autocomplete="off" />
+              <div class="opcode-dropdown" id="opcodeCodeDropdown"></div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label" data-label="ref_id">Ticket Number</div>
+            <input class="form-input" id="f-ref" type="text" placeholder="Ticket #" />
+          </div>
+
+          <div class="form-group">
+            <div class="form-label">Odometer</div>
+            <input class="form-input" id="f-odo" type="number" placeholder="km" />
+          </div>
+
+          <div class="checkbox-row">
+            <input type="checkbox" id="f-warranty" />
+            <label for="f-warranty" data-label="warranty">Warranty work</label>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label">Story / Notes</div>
+            <div class="story-wrap">
+              <textarea class="form-textarea" id="f-story" placeholder="Work performed notes…"></textarea>
+              <div class="story-dropdown" id="storyDropdown"></div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn-secondary" onclick="clearForm()">Clear</button>
+            <button class="btn-primary"   onclick="savePunch()">Save Punch</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Copy text panel -->
+      <div class="sidebar-panel" id="panel-copy">
+        <div class="copy-panel">
+          <div class="section-label" data-label="copy_title">TEXT TO COPY</div>
+          <div class="select-punch-hint" id="copyHint">← Select a punch to build its copy text</div>
+          <div id="copyContent" style="display:none">
+            <div class="copy-box" id="copyTextBox"></div>
+            <button class="btn-copy" id="copyBtn" onclick="copyExportText()">Copy to Clipboard</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reference panel -->
+      <div class="sidebar-panel" id="panel-ref">
+        <div class="ref-panel">
+          <div style="display:flex;gap:8px;align-items:center">
+            <input class="ref-search" id="refSearch" placeholder="Search notes, tags…" oninput="filterRef()" style="flex:1" />
+            <button class="btn-ref-add" id="btnRefAdd" onclick="openRefModal(null, this)" title="Add note">＋</button>
+          </div>
+          <div id="refContent"></div>
+        </div>
+      </div>
+
+      <!-- Calc panel -->
+      <div class="sidebar-panel" id="panel-calc">
+        <div class="ref-panel">
+          <div class="section-label" style="padding:12px 0 4px">CALCULATORS</div>
+
+          <!-- Tire wear -->
+          <div class="calc-card">
+            <div class="calc-title">Tire Wear Estimator</div>
+            <div class="form-row">
+              <div class="form-group">
+                <div class="form-label">Measurement (mm)</div>
+                <input class="form-input" id="c-tire-meas" type="number" step="0.1" placeholder="5.0" oninput="calcTireWear()" />
+              </div>
+              <div class="form-group">
+                <div class="form-label">Current km</div>
+                <input class="form-input" id="c-tire-km" type="number" placeholder="22399" oninput="calcTireWear()" />
+              </div>
+            </div>
+            <div class="calc-result" id="c-tire-result"></div>
+          </div>
+
+          <!-- Labour cost -->
+          <div class="calc-card">
+            <div class="calc-title">Labour Cost</div>
+            <div class="form-row">
+              <div class="form-group">
+                <div class="form-label">Rate ($/hr)</div>
+                <input class="form-input" id="c-lab-rate" type="number" placeholder="239" oninput="calcLabour()" />
+              </div>
+              <div class="form-group">
+                <div class="form-label">Time (hrs)</div>
+                <input class="form-input" id="c-lab-time" type="number" step="0.1" placeholder="1.5" oninput="calcLabour()" />
+              </div>
+            </div>
+            <div class="calc-result" id="c-lab-result"></div>
+          </div>
+
+          <!-- Hold time -->
+          <div class="calc-card">
+            <div class="calc-title">Hold Time</div>
+            <div class="form-group">
+              <div class="form-label" id="c-hold-label">Hours flagged</div>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input class="form-input" id="c-hold-val" type="number" step="0.5" placeholder="4" oninput="calcHold()" />
+                <button class="btn-unit-toggle" id="c-hold-toggle" onclick="toggleHoldUnit()" title="Toggle hrs/days">hrs</button>
+              </div>
+            </div>
+            <div class="calc-result" id="c-hold-result"></div>
+          </div>
+
+          <!-- Odometer converter -->
+          <div class="calc-card">
+            <div class="calc-title">Odometer Converter</div>
+            <div class="form-row">
+              <div class="form-group">
+                <div class="form-label">km</div>
+                <input class="form-input" id="c-odo-km" type="number" placeholder="22399" oninput="calcOdoFromKm()" />
+              </div>
+              <div class="form-group">
+                <div class="form-label">miles</div>
+                <input class="form-input" id="c-odo-mi" type="number" placeholder="13922" oninput="calcOdoFromMi()" />
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Carryover modal -->
+<div class="modal-overlay" id="carryoverModal" onclick="if(event.target===this)declineCarryover()">
+  <div class="modal">
+    <div class="modal-title">CONTINUE FROM YESTERDAY</div>
+    <p>Last open job from previous day:</p>
+    <div class="modal-label" id="carryoverLabel"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary" style="flex:1" onclick="declineCarryover()">Start Fresh</button>
+      <button class="btn-primary"   style="flex:1" onclick="acceptCarryover()">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirmation modal -->
+<div class="modal-overlay" id="deleteModal" onclick="if(event.target===this)closeDeleteModal()">
+  <div class="modal">
+    <div class="modal-title" style="color:var(--red)">DELETE PUNCH</div>
+    <p>Are you sure you want to delete this punch?</p>
+    <div class="modal-label" id="deleteModalLabel"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary" style="flex:1" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn-primary"   style="flex:1;background:var(--red)" id="deleteConfirmBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ref add/edit modal -->
+<div class="modal-overlay ref-modal-overlay" id="refModal" onclick="if(event.target===this)closeRefModal()">
+  <div class="modal" id="refModalBox">
+    <div class="modal-title" id="refModalTitle">ADD NOTE</div>
+    <input type="hidden" id="ref-edit-row" value="" />
+    <input type="hidden" id="ref-edit-sheet" value="" />
+    <div class="form-group" style="margin-bottom:10px">
+      <div class="form-label">Category</div>
+      <input class="form-input" id="ref-cat" list="refCatList" placeholder="e.g. Torque Specs" />
+      <datalist id="refCatList"></datalist>
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <div class="form-label">Key</div>
+      <input class="form-input" id="ref-key" placeholder="e.g. Rear Hub Nut" />
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <div class="form-label">Value</div>
+      <textarea class="form-textarea" id="ref-val" style="min-height:80px" placeholder="e.g. 200 Nm + 180° — single use"></textarea>
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <div class="form-label">Tags (comma separated)</div>
+      <input class="form-input" id="ref-tags" placeholder="e.g. torque, suspension, rear" />
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary" style="flex:1" onclick="closeRefModal()">Cancel</button>
+      <button class="btn-primary"   style="flex:1" onclick="saveRefNote()">Save Note</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reload button -->
+<button onclick="location.reload()" title="Reload" style="
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  width:36px;
+  height:36px;
+  border-radius:50%;
+  border:1px solid var(--border);
+  background:var(--surface2);
+  color:var(--muted);
+  font-size:16px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  transition:color 0.15s, border-color 0.15s;
+  z-index:500;
+" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--accent)'"
+   onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">↻</button>
+
+<script src="app.js?v=2"></script>
+</body>
+</html>
