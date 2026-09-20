@@ -340,7 +340,10 @@ function renderPunches() {
       + (isBreak  ? ' break-card' : '');
     card.dataset.row = p.row;
 
+    // With no job number the description becomes the card title, so it must
+    // not be repeated on the line below it.
     const roText       = p.ro ? `#${p.ro}` : p.description || '—';
+    const descText     = p.ro ? (p.description || '') : '';
     const lineText     = p.line ? ` <span>/ ${p.line}</span>` : '';
     const storyPreview = p.story && p.story !== '-' ? p.story.split('\n')[0] : '';
     const dur = p.duration ? formatDuration(p.duration) : null;
@@ -358,7 +361,7 @@ function renderPunches() {
       </div>
       <div class="punch-body">
         <div class="punch-ro">${roText}${lineText}</div>
-        <div class="punch-desc">${p.description || ''} ${p.opcode ? '· ' + p.opcode : ''}</div>
+        <div class="punch-desc">${[descText, p.opcode ? '· ' + p.opcode : ''].filter(Boolean).join(' ')}</div>
         ${storyPreview ? `<div class="punch-story-preview">${storyPreview}</div>` : ''}
       </div>
       <div class="punch-actions">
