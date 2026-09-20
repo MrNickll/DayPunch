@@ -1,2 +1,27 @@
+# Python build output
 __pycache__/
 *.pyc
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# Anything the app produces at runtime. None of this belongs in a public
+# repository: day sheets hold job numbers and vehicle details, the database
+# holds a shop's own reference notes, and settings.json holds whatever site
+# it was configured for.
+*.xlsx
+*.xlsm
+*.sqlite3
+*.sqlite3-journal
+*.accdb
+*.mdb
+settings.json
+pending_writes.json
+
+# ...but Claude Code's project settings are a normal thing to version.
+!.claude/settings.json
