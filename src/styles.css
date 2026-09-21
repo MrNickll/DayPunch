@@ -1,6 +1,24 @@
 /* DayPunch styles.css v2026.6.02 */
 /* ── Fonts ────────────────────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+/* IBM Plex Mono, bundled so that loading the app never reaches the network.
+   Copyright IBM Corp., SIL Open Font License 1.1 -- see assets/fonts/OFL.txt.
+   The files are the unmodified originals from @ibm/plex-mono 2.5.0; the OFL
+   reserves the name "Plex" for unmodified versions. Only the two weights the
+   stylesheet uses are shipped. */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('assets/fonts/IBMPlexMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('assets/fonts/IBMPlexMono-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
 
 /* ── Variables ───────────────────────────────────────────────────────────── */
 /* ── Theme ───────────────────────────────────────────────────────────────────

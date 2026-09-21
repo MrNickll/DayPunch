@@ -2,3 +2,13 @@ DayPunch
 Copyright 2026 Nicolas Lapointe Lafortune (github.com/MrNickll)
 
 Licensed under the Apache License, Version 2.0. See LICENSE.
+
+-------------------------------------------------------------------------------
+Third-party material
+
+src/assets/fonts/IBMPlexMono-Regular.woff2
+src/assets/fonts/IBMPlexMono-SemiBold.woff2
+  IBM Plex Mono, Copyright (c) 2017 IBM Corp. with Reserved Font Name "Plex".
+  Licensed under the SIL Open Font License, Version 1.1 -- not under the Apache
+  License. Unmodified originals from the @ibm/plex-mono 2.5.0 package.
+  See src/assets/fonts/OFL.txt.

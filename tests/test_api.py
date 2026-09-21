@@ -229,6 +229,26 @@ check("a path to a file is refused", folder_error(a_file) is not None, True)
 check("a folder that does not exist yet is fine", folder_error(os.path.join(WORK, "new", "deep")), None)
 check("~ is expanded", config._validate_folder("~/DayPunchTest").startswith(os.path.expanduser("~")), True)
 
+# README promises no outbound connections. A CDN font or script added later
+# would break that silently -- this is what the Google Fonts @import did.
+print("\nNothing loads from the network")
+import re as _re
+external = _re.compile(r"""https?://(?!127\.0\.0\.1|localhost)[^\s'")]+""")
+for route in ("/", "/styles.css", "/app.js"):
+    body = client.get(route).get_data(as_text=True)
+    check(f"{route} references no outside host", external.findall(body), [])
+
+fonts_dir = os.path.join(SRC, "assets", "fonts")
+bundled = sorted(f for f in os.listdir(fonts_dir) if f.endswith(".woff2"))
+check("the stylesheet's fonts are bundled", bundled,
+      ["IBMPlexMono-Regular.woff2", "IBMPlexMono-SemiBold.woff2"])
+for f in bundled:
+    r = client.get(f"/assets/fonts/{f}")
+    check(f"  ...{f} is served as a font", (r.status_code, r.mimetype), (200, "font/woff2"))
+# The OFL lets the fonts ship only alongside their licence.
+check("  ...with the Open Font License beside them",
+      os.path.exists(os.path.join(fonts_dir, "OFL.txt")), True)
+
 shutil.rmtree(WORK, ignore_errors=True)
 print(f"\n{passed} passed, {failed} failed\n")
 sys.exit(1 if failed else 0)

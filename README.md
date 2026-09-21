@@ -32,7 +32,8 @@ in `settings.json` and by default `DayPunch/Daily` under the user's Documents
 folder. Calendar event files, if used, go in a `Calendar` subfolder of it.
 
 No database driver, no service, no scheduled task, no registry keys, no
-elevation, no outbound connections.
+elevation, no outbound connections. Everything the interface loads, fonts
+included, is served from the app's own folder.
 
 ## Configuration
 
@@ -54,6 +55,11 @@ touching code. `org_name` appears in the window title when set.
 `src/assets/logo.svg` is a placeholder. Replace it with any square-viewBox SVG
 and it will fit the header slot. `--accent` at the top of `src/styles.css` is
 the single colour to change for a house palette.
+
+## Third-party material
+
+IBM Plex Mono is bundled in `src/assets/fonts/`, under the SIL Open Font
+License 1.1 rather than this project's Apache License. See `NOTICE`.
 
 ## Running it
 
