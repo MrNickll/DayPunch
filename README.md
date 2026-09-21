@@ -1,4 +1,4 @@
-# PunchTrak
+# DayPunch
 
 Licensed under the Apache License 2.0 — see `LICENSE`.
 
@@ -18,9 +18,9 @@ op-codes, notes and reusable text snippets.
 
 | | |
 |---|---|
-| One SQLite file | `%LOCALAPPDATA%\PunchTrak\punchtrak.sqlite3` — op-codes and reference notes |
-| Settings | `%LOCALAPPDATA%\PunchTrak\settings.json` — folder location and field labels |
-| One `.xlsx` per day | in the folder named by `data_folder`, default `Documents\PunchTrak\Daily` |
+| One SQLite file | `%LOCALAPPDATA%\DayPunch\daypunch.sqlite3` — op-codes and reference notes |
+| Settings | `%LOCALAPPDATA%\DayPunch\settings.json` — folder location and field labels |
+| One `.xlsx` per day | in the folder named by `data_folder`, default `Documents\DayPunch\Daily` |
 | Optional calendar files | `.json` files in a `Calendar` subfolder, if used |
 
 No database driver, no service, no scheduled task, no registry keys, no

@@ -1,5 +1,5 @@
-# PunchTrak — Copyright 2026 Nicolas. Licensed under the Apache License 2.0.
-# PunchTrak config.py
+# DayPunch — Copyright 2026 Nicolas Lapointe Lafortune. Licensed under the Apache License 2.0.
+# DayPunch config.py
 """Paths, settings and defaults.
 
 Nothing here names an employer. Anything site-specific lives in settings.json
@@ -13,7 +13,7 @@ import os
 import sys
 
 VERSION = "2026.10.01"
-APP_NAME = "PunchTrak"
+APP_NAME = "DayPunch"
 
 HOME = os.path.expanduser("~")
 _SRC_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -31,7 +31,7 @@ def _app_data_dir():
     return os.path.join(base, APP_NAME)
 
 
-APP_DATA_DIR = os.environ.get("PUNCHTRAK_APP_DATA", _app_data_dir())
+APP_DATA_DIR = os.environ.get("DAYPUNCH_APP_DATA", _app_data_dir())
 SETTINGS_FILE = os.path.join(APP_DATA_DIR, "settings.json")
 
 # ── Site settings ─────────────────────────────────────────────────────────────
@@ -70,23 +70,23 @@ def _load_settings():
 
 SETTINGS = _load_settings()
 LABELS = SETTINGS["labels"]
-ORG_NAME = os.environ.get("PUNCHTRAK_ORG", SETTINGS["org_name"])
+ORG_NAME = os.environ.get("DAYPUNCH_ORG", SETTINGS["org_name"])
 
-PORT = int(os.environ.get("PUNCHTRAK_PORT", "5000"))
+PORT = int(os.environ.get("DAYPUNCH_PORT", "5000"))
 
 # ── Daily punch workbooks ─────────────────────────────────────────────────────
-FOLDER = os.environ.get("PUNCHTRAK_FOLDER", SETTINGS["data_folder"])
+FOLDER = os.environ.get("DAYPUNCH_FOLDER", SETTINGS["data_folder"])
 
 # ── Calendar drop folder ──────────────────────────────────────────────────────
 CALENDAR_FOLDER = os.environ.get(
-    "PUNCHTRAK_CALENDAR_FOLDER", os.path.join(FOLDER, "Calendar")
+    "DAYPUNCH_CALENDAR_FOLDER", os.path.join(FOLDER, "Calendar")
 )
 
 # ── Reference database ────────────────────────────────────────────────────────
 # One SQLite file in the user profile. No driver to install, no network path,
 # nothing to share — which is also the shortest answer to "what does it touch?".
 DB_PATH = os.environ.get(
-    "PUNCHTRAK_DB", os.path.join(APP_DATA_DIR, "punchtrak.sqlite3")
+    "DAYPUNCH_DB", os.path.join(APP_DATA_DIR, "daypunch.sqlite3")
 )
 
 # Seed content for a fresh database: only shop knowledge that is not tied to any

@@ -1,4 +1,4 @@
-"""In-process API checks for PunchTrak.
+"""In-process API checks for DayPunch.
 
     tests/.venv/bin/python tests/test_api.py
 
@@ -15,11 +15,11 @@ from datetime import date
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(os.path.dirname(HERE), "src")
 
-WORK = tempfile.mkdtemp(prefix="punchtrak-test-")
+WORK = tempfile.mkdtemp(prefix="daypunch-test-")
 os.environ.update(
-    PUNCHTRAK_APP_DATA=os.path.join(WORK, "appdata"),
-    PUNCHTRAK_FOLDER=os.path.join(WORK, "daily"),
-    PUNCHTRAK_CALENDAR_FOLDER=os.path.join(WORK, "calendar"),
+    DAYPUNCH_APP_DATA=os.path.join(WORK, "appdata"),
+    DAYPUNCH_FOLDER=os.path.join(WORK, "daily"),
+    DAYPUNCH_CALENDAR_FOLDER=os.path.join(WORK, "calendar"),
 )
 sys.path.insert(0, SRC)
 

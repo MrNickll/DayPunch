@@ -1,5 +1,5 @@
-// PunchTrak — Copyright 2026 Nicolas. Licensed under the Apache License 2.0.
-// PunchTrak app.js
+// DayPunch — Copyright 2026 Nicolas Lapointe Lafortune. Licensed under the Apache License 2.0.
+// DayPunch app.js
 // ── State ─────────────────────────────────────────────────────────────────────
 let punches      = [];
 let opcodes      = [];
@@ -18,7 +18,7 @@ let resumeRoIdx = 0;            // Current index in the list
 let newPunchInProgress = false;
 let formDirty            = false;   // entry form holds edits not yet in `punches`
 let deferredExternalChange = false; // file changed while we were holding off
-let settings = { app_name: 'PunchTrak', org_name: '', labels: {} };
+let settings = { app_name: 'DayPunch', org_name: '', labels: {} };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 // Every input in the entry form, in one place: dirty tracking and the live copy

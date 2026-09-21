@@ -1,5 +1,5 @@
-# PunchTrak — Copyright 2026 Nicolas. Licensed under the Apache License 2.0.
-# PunchTrak launch.py
+# DayPunch — Copyright 2026 Nicolas Lapointe Lafortune. Licensed under the Apache License 2.0.
+# DayPunch launch.py
 import threading
 import time
 import os

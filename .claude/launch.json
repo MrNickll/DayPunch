@@ -1,6 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "punchtrak", "runtimeExecutable": "tests/run_dev_server.sh", "runtimeArgs": [], "port": 5000 }
+    { "name": "daypunch", "runtimeExecutable": "tests/run_dev_server.sh", "runtimeArgs": [], "port": 5000 }
   ]
 }

@@ -1,5 +1,5 @@
-# PunchTrak — Copyright 2026 Nicolas. Licensed under the Apache License 2.0.
-# PunchTrak calendar_sync.py
+# DayPunch — Copyright 2026 Nicolas Lapointe Lafortune. Licensed under the Apache License 2.0.
+# DayPunch calendar_sync.py
 # v2026.9.01
 import os
 import json
@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from config import CALENDAR_FOLDER
 
-log = logging.getLogger("punchtrak")
+log = logging.getLogger("daypunch")
 
 def ensure_calendar_folder():
     os.makedirs(CALENDAR_FOLDER, exist_ok=True)
@@ -84,7 +84,7 @@ def build_event_json(closed_punch, next_punch):
 
 def write_calendar_event(closed_punch, next_punch):
     """
-    Write a .json calendar event file to the PunchTrak_Calendar folder.
+    Write a .json calendar event file to the DayPunch_Calendar folder.
     Called when a new punch is saved and the previous one is now closed.
     """
     try:
@@ -110,7 +110,7 @@ def write_calendar_event(closed_punch, next_punch):
         log.exception("calendar event write failed")  # never crash over calendar sync
 
 def cleanup_old_calendar_files(days=30):
-    """Delete .json files older than `days` days from PunchTrak_Calendar."""
+    """Delete .json files older than `days` days from DayPunch_Calendar."""
     try:
         if not os.path.exists(CALENDAR_FOLDER):
             return

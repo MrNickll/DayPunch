@@ -1,5 +1,5 @@
-# PunchTrak — Copyright 2026 Nicolas. Licensed under the Apache License 2.0.
-# PunchTrak server.py
+# DayPunch — Copyright 2026 Nicolas Lapointe Lafortune. Licensed under the Apache License 2.0.
+# DayPunch server.py
 from flask import Flask, jsonify, request, send_from_directory
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border
@@ -16,7 +16,7 @@ from config import (
 from calendar_sync import write_calendar_event, cleanup_old_calendar_files
 
 app = Flask(__name__, static_folder=None)
-log = logging.getLogger("punchtrak")
+log = logging.getLogger("daypunch")
 
 _webview_window = None
 
@@ -597,7 +597,7 @@ def get_settings():
 @app.route("/api/title", methods=["POST"])
 def set_title():
     global _webview_window
-    title = request.json.get("title", "PunchTrak")
+    title = request.json.get("title", "DayPunch")
     if _webview_window:
         _webview_window.set_title(title)
     return jsonify({"ok": True})

@@ -265,9 +265,9 @@ if (typeof require !== 'undefined' && typeof module !== 'undefined') {
   process.exit(r.failed ? 1 : 0);
 } else {
   ObjC.import('Foundation');
-  // PUNCHTRAK_APP_JS lets the same harness run against another copy of app.js,
+  // DAYPUNCH_APP_JS lets the same harness run against another copy of app.js,
   // which is how the fixes are A/B'd against the code they replaced.
-  var override = $.NSProcessInfo.processInfo.environment.objectForKey('PUNCHTRAK_APP_JS');
+  var override = $.NSProcessInfo.processInfo.environment.objectForKey('DAYPUNCH_APP_JS');
   var fm = $.NSFileManager.defaultManager;
   var cwd = fm.currentDirectoryPath.js;
   // Run from the repo root or from tests/ — resolve either way rather than
