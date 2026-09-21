@@ -49,10 +49,28 @@ the single colour to change for a house palette.
 
 ## Running it
 
+Install the three dependencies once:
+
 ```
-tests/run_dev_server.sh          # development, throwaway profile in tests/sandbox
-python src/launch.py             # the real desktop window
+python -m pip install -r requirements.txt
 ```
+
+Then start it with the launcher for your platform:
+
+| Platform | Launcher |
+|---|---|
+| Windows | `launch.cmd` |
+| macOS | `launch.command` — double-click in Finder |
+| Linux | `launch.sh` |
+
+Each one uses a `.venv` beside the app if there is one, otherwise the system
+Python, and prints exactly what to install if a dependency is missing.
+
+On macOS a copy downloaded as a ZIP carries Apple's quarantine flag, so the
+first launch needs right-click → Open. A `git clone` does not.
+
+For development, `tests/run_dev_server.sh` serves the app in a browser against a
+throwaway profile.
 
 ## Tests
 

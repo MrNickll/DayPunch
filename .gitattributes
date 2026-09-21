@@ -1,0 +1,6 @@
+# Launchers must keep the line endings their shell expects, whatever the
+# checkout platform. A .sh with CRLF fails on Linux ("bash\r: not found"), and a
+# .cmd with LF can make cmd.exe lose track of goto labels.
+*.sh       text eol=lf
+*.command  text eol=lf
+*.cmd      text eol=crlf

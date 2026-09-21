@@ -12,7 +12,9 @@ SANDBOX="$HERE/sandbox"
 if [ ! -x "$VENV/bin/python" ]; then
   echo "Creating $VENV ..."
   python3 -m venv "$VENV"
-  "$VENV/bin/pip" -q install flask openpyxl
+  # "python -m pip" rather than bin/pip: bin/pip carries the venv's absolute path
+  # in its shebang, so it breaks the moment the folder is moved or renamed.
+  "$VENV/bin/python" -m pip -q install flask openpyxl
 fi
 
 mkdir -p "$SANDBOX"

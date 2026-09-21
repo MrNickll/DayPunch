@@ -1,0 +1,6 @@
+# DayPunch runtime dependencies. Everything else is the Python standard library.
+# Floors are the versions tested; ceilings keep a major upgrade from landing
+# unannounced.
+flask>=3.1,<4
+openpyxl>=3.1,<4
+pywebview>=6.2,<7
