@@ -16,12 +16,20 @@ op-codes, notes and reusable text snippets.
 
 ## What it touches
 
-| | |
+Everything it writes goes to two places.
+
+**A per-user state folder**, holding `daypunch.sqlite3` (op-codes and reference
+notes) and `settings.json` (data folder and field labels):
+
+| Platform | State folder |
 |---|---|
-| One SQLite file | `%LOCALAPPDATA%\DayPunch\daypunch.sqlite3` — op-codes and reference notes |
-| Settings | `%LOCALAPPDATA%\DayPunch\settings.json` — folder location and field labels |
-| One `.xlsx` per day | in the folder named by `data_folder`, default `Documents\DayPunch\Daily` |
-| Optional calendar files | `.json` files in a `Calendar` subfolder, if used |
+| Windows | `%LOCALAPPDATA%\DayPunch` |
+| macOS | `~/Library/Application Support/DayPunch` |
+| Linux | `$XDG_DATA_HOME/DayPunch`, by default `~/.local/share/DayPunch` |
+
+**A data folder** for the day sheets, one `.xlsx` per day, set by `data_folder`
+in `settings.json` and by default `DayPunch/Daily` under the user's Documents
+folder. Calendar event files, if used, go in a `Calendar` subfolder of it.
 
 No database driver, no service, no scheduled task, no registry keys, no
 elevation, no outbound connections.
