@@ -144,7 +144,7 @@ header {
 
 .main {
   display:   grid;
-  grid-template-columns: minmax(300px, 380px) 1fr;
+  grid-template-columns: minmax(300px, 440px) 1fr;
   overflow:  hidden;
 }
 
@@ -297,6 +297,7 @@ header {
 .new-punch-launcher {
   position:    relative;
   display:     flex;
+  min-width:   0;
   align-items: flex-start;
   margin-bottom: 8px;
   height:      32px;
@@ -338,7 +339,9 @@ header {
   border-radius: 0 6px 6px 0;
   height:        32px;
 }
-.punch-type-picker.open { display: flex; }
+/* Allowed to shrink with its buttons, so the launcher can never push the column
+   into a horizontal scroll, whatever the window or the font turns out to be. */
+.punch-type-picker.open { display: flex; min-width: 0; flex: 0 1 auto; }
 
 .punch-type-divider {
   width:      1px;
@@ -354,7 +357,11 @@ header {
   font-size:      11px;
   font-weight:    600;
   cursor:         pointer;
-  width:          52px;
+  /* Each button is as wide as its own label. A shared fixed width either
+     clipped "Diagnostic" or, spread equally, starved it to feed "Home". */
+  flex:           1 1 auto;
+  min-width:      0;
+  padding:        0 6px;
   display:        flex;
   flex-direction: column;
   align-items:    center;
@@ -363,7 +370,6 @@ header {
   height:         32px;
   transition:     background 0.15s, outline 0.1s;
   white-space:    nowrap;
-  flex-shrink:    0;
   outline:        1px solid transparent;
   outline-offset: -3px;
 }
@@ -437,6 +443,12 @@ header {
 .form-col-main,
 .form-col-story { display: flex; flex-direction: column; min-width: 0; }
 .form-col-main  { gap: 12px; }
+/* .form-group carries flex: 1 to share WIDTH inside a .form-row. Stacked in a
+   full-height column, the same rule shared out the HEIGHT instead and spread the
+   fields apart. Direct children of the column keep their natural height. */
+.form-col-main > .form-group,
+.form-col-main > .form-row,
+.form-col-main > .checkbox-row { flex: 0 0 auto; }
 .form-col-story .form-group  { flex: 1; min-height: 0; }
 .form-col-story .story-wrap  { flex: 1; min-height: 0; display: flex; }
 .form-col-story .form-textarea { flex: 1; min-height: 180px; resize: none; }
@@ -1049,3 +1061,10 @@ header {
   line-height: 1.5;
 }
 .form-input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* The sub-label under each punch type gives way first when space runs out. */
+.btn-type span {
+  max-width:     100%;
+  overflow:      hidden;
+  text-overflow: ellipsis;
+}
