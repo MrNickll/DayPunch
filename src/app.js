@@ -292,6 +292,13 @@ async function openSettings() {
   (org.disabled ? folder : org).focus();
 }
 
+// The header's reload button. pywebview has no browser toolbar, so this is the
+// only way to reload -- but reloading drops anything typed and not yet saved.
+function reloadApp() {
+  if (formDirty && !confirm('The entry form has unsaved changes. Reload and lose them?')) return;
+  location.reload();
+}
+
 function closeSettings() {
   document.getElementById('settingsModal').classList.remove('open');
 }

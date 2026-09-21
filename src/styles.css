@@ -1039,7 +1039,15 @@ header {
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 /* ── Settings ────────────────────────────────────────────────────────────── */
-.btn-gear {
+/* Header icon buttons (reload, settings). They live in the header rather than
+   floating over the page, so they can never sit on top of the form. */
+.header-actions {
+  display:     flex;
+  align-items: center;
+  gap:         8px;
+}
+
+.btn-icon {
   width:           32px;
   height:          32px;
   flex:            0 0 32px;
@@ -1053,9 +1061,9 @@ header {
   cursor:          pointer;
   transition:      color 0.15s, border-color 0.15s, background 0.15s;
 }
-.btn-gear:hover,
-.btn-gear:focus-visible { color: var(--accent); border-color: var(--accent); background: var(--tint-accent); outline: none; }
-.btn-gear svg { width: 18px; height: 18px; display: block; }
+.btn-icon:hover,
+.btn-icon:focus-visible { color: var(--accent); border-color: var(--accent); background: var(--tint-accent); outline: none; }
+.btn-icon svg { width: 18px; height: 18px; display: block; }
 
 .modal-wide { width: 620px; }
 .settings-section {

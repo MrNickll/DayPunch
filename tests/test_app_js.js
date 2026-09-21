@@ -66,6 +66,9 @@ function main(src) {
   var toasts = [];
   var setInterval = function () { return 0; }, clearInterval = function () {};
   var setTimeout = function (fn) { fn(); return 0; };   // run deferred work now
+  var confirmAnswer = true, confirmAsked = 0, reloads = 0;
+  var confirm  = function () { confirmAsked++; return confirmAnswer; };
+  var location = { reload: function () { reloads++; } };
   var fetchCalls = [];
   var fetch = function (url, opts) {           // never settles; records what was asked
     fetchCalls.push({ url: url, method: (opts && opts.method) || 'GET' });
@@ -74,7 +77,7 @@ function main(src) {
 
   var api = new Function(
     'document', 'window', 'navigator', 'console', 'fetch',
-    'setInterval', 'clearInterval', 'setTimeout', '__toasts',
+    'setInterval', 'clearInterval', 'setTimeout', '__toasts', 'confirm', 'location',
     src + `
     showToast = function (m, isErr) { __toasts.push({ msg: m, error: !!isErr }); };
     return {
@@ -89,10 +92,11 @@ function main(src) {
       lastPunchIdx, openPunchIdx, activePunchIdx, isOpenStatus,
       currentDayDate, todayISO, readForm, buildCopyText, buildCopyTextFromForm,
       refreshDecision, markFormDirty, clearFormDirty, wireFormListeners,
-      setFormValues, clearForm, offerResume, launchPunch, handleGlobalKeydown,
+      setFormValues, clearForm, offerResume, launchPunch, handleGlobalKeydown, reloadApp,
       togglePunchLauncher, closePunchLauncher,
     };`
-  )(document, window, navigator, console, fetch, setInterval, clearInterval, setTimeout, toasts);
+  )(document, window, navigator, console, fetch, setInterval, clearInterval, setTimeout, toasts,
+    confirm, location);
 
   var passed = 0, failed = 0, out = [];
   function check(label, got, want) {
@@ -273,6 +277,19 @@ function main(src) {
   toasts.length = 0;
   key({ ctrlKey: true });
   check('with it closed, Ctrl+S is back to saving the punch', toasts.pop().msg, 'Time is required');
+
+  // Reloading drops whatever is typed and not saved, and the button now sits
+  // right beside the settings gear where a stray click is easy.
+  out.push('\nReload');
+  api.clearFormDirty(); confirmAsked = 0; reloads = 0;
+  api.reloadApp();
+  check('a clean form reloads straight away', [reloads, confirmAsked], [1, 0]);
+  api.markFormDirty(); confirmAnswer = false; confirmAsked = 0; reloads = 0;
+  api.reloadApp();
+  check('unsaved edits ask first, and "no" keeps them', [reloads, confirmAsked], [0, 1]);
+  confirmAnswer = true; reloads = 0;
+  api.reloadApp();
+  check('  ..."yes" reloads', reloads, 1);
 
   out.push('\n' + passed + ' passed, ' + failed + ' failed\n');
   return { text: out.join('\n'), failed: failed };
