@@ -20,6 +20,30 @@ log = logging.getLogger("daypunch")
 
 _webview_window = None
 
+
+# ── Request guard ─────────────────────────────────────────────────────────────
+# The server only listens on loopback, but a web page open in the user's normal
+# browser can still send it requests. The awkward case is DNS rebinding: a
+# hostile name re-pointed at 127.0.0.1, which the browser then treats as the
+# same origin and lets read the replies. Such requests still carry the hostile
+# name in their Host header, so refusing anything not addressed to this machine
+# closes that door for every route at once.
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
+
+
+def _hostname(host):
+    host = (host or "").strip().lower()
+    if host.startswith("["):                        # [::1]:5000
+        return host.split("]", 1)[0] + "]"
+    return host.split(":", 1)[0]
+
+
+@app.before_request
+def _only_local_hosts():
+    if _hostname(request.host) not in _LOCAL_HOSTS:
+        return jsonify({"error": "Requests must be addressed to this machine."}), 403
+
+
 def set_webview_window(win):
     global _webview_window
     _webview_window = win
@@ -585,13 +609,39 @@ def db_status():
 
 @app.route("/api/settings", methods=["GET"])
 def get_settings():
-    """Field labels and org name, so nothing shop-specific is baked into the UI."""
+    """Field labels and org name, so nothing shop-specific is baked into the UI,
+    plus what the settings screen needs to edit them."""
     return jsonify({
-        "labels":   config.LABELS,
-        "org_name": config.ORG_NAME,
-        "app_name": config.APP_NAME,
-        "version":  config.VERSION,
+        "labels":             config.LABELS,
+        "org_name":           config.ORG_NAME,
+        "app_name":           config.APP_NAME,
+        "version":            config.VERSION,
+        "data_folder":        config.SETTINGS["data_folder"],
+        "active_data_folder": FOLDER,          # what is in use until restart
+        "state_folder":       config.APP_DATA_DIR,
+        "defaults":           config.DEFAULTS["labels"],
+        "locked":             config.locked_fields(),
     })
+
+
+@app.route("/api/settings", methods=["PUT"])
+def update_settings():
+    # Requiring JSON is also part of keeping other web pages out: a cross-site
+    # request with this content type needs a CORS preflight, and this server
+    # never grants one.
+    if not request.is_json:
+        return jsonify({"error": "Expected application/json."}), 415
+    try:
+        new = config.validate_settings(request.get_json(silent=True))
+        config.save_settings(new)
+    except config.SettingsError as e:
+        return jsonify({"error": str(e)}), 400
+    except OSError as e:
+        log.exception("saving settings failed")
+        return jsonify({"error": f"Could not write the settings file: {e}"}), 500
+    restart = ("data_folder" not in config.locked_fields()
+               and os.path.normpath(new["data_folder"]) != os.path.normpath(FOLDER))
+    return jsonify({"ok": True, "restart_needed": restart})
 
 # ── Windows Title Bar ─────────────────────────────────────────────────────────
 @app.route("/api/title", methods=["POST"])

@@ -54,9 +54,18 @@ function handleGlobalKeydown(e) {
   // is not having to tab out of the story box after a description has pulled in
   // an OP-code and a prebuilt story. The Ref note modal is the one thing that
   // takes the shortcut over while it is open.
+  const settingsOpen = document.getElementById('settingsModal').classList.contains('open');
+
+  if (e.key === 'Escape' && settingsOpen) {
+    closeSettings();
+    return;
+  }
+
   if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
     e.preventDefault();   // also stops WebView2's own "save page" dialog
-    if (document.getElementById('refModal').classList.contains('open')) saveRefNote();
+    // An open dialog owns the shortcut; otherwise it saves the punch.
+    if (settingsOpen) saveSettings();
+    else if (document.getElementById('refModal').classList.contains('open')) saveRefNote();
     else savePunch();
     return;
   }
@@ -217,6 +226,107 @@ async function applySettings() {
   } catch (e) {
     // Keep the markup defaults
   }
+}
+
+// ── Settings screen ───────────────────────────────────────────────────────────
+// Edits settings.json through the server. Never config.py: that is the program
+// itself, read-only once installed.
+const LABEL_FIELDS = [
+  ['job_number', 'Job number field'],
+  ['job_line',   'Line field'],
+  ['ref_id',     'Reference field'],
+  ['warranty',   'Warranty checkbox'],
+  ['copy_tab',   'Copy tab'],
+  ['copy_title', 'Copy panel title'],
+];
+let settingsSnapshot = null;
+
+async function openSettings() {
+  let data;
+  try {
+    data = await jsonOrNull(await fetch('/api/settings'));
+  } catch (e) {
+    data = null;
+  }
+  if (!data) { showToast('Could not load the settings', true); return; }
+  settingsSnapshot = data;
+  const locked = new Set(data.locked || []);
+
+  const org = document.getElementById('set-org');
+  org.value    = data.org_name || '';
+  org.disabled = locked.has('org_name');
+
+  const folder = document.getElementById('set-folder');
+  // A pinned folder shows the one actually in use, not the one in the file.
+  folder.value    = (locked.has('data_folder') ? data.active_data_folder : data.data_folder) || '';
+  folder.disabled = locked.has('data_folder');
+  document.getElementById('set-folder-hint').textContent =
+    locked.has('data_folder')
+      ? 'Set by the DAYPUNCH_FOLDER environment variable.'
+      : (data.active_data_folder && data.active_data_folder !== data.data_folder)
+        ? `Still using ${data.active_data_folder} until DayPunch restarts.`
+        : 'A change here applies the next time DayPunch starts.';
+
+  // Built node by node: these values come from a file the user can edit, so
+  // they never go through innerHTML.
+  const grid = document.getElementById('set-labels');
+  grid.innerHTML = '';
+  LABEL_FIELDS.forEach(([key, name]) => {
+    const group = document.createElement('div');
+    group.className = 'form-group';
+    const label = document.createElement('div');
+    label.className = 'form-label';
+    label.textContent = name;
+    const input = document.createElement('input');
+    input.className   = 'form-input';
+    input.maxLength   = 40;
+    input.dataset.key = key;
+    input.value       = (data.labels && data.labels[key]) || '';
+    input.placeholder = (data.defaults && data.defaults[key]) || '';
+    group.append(label, input);
+    grid.append(group);
+  });
+
+  document.getElementById('set-where').textContent = `Stored in ${data.state_folder}`;
+  document.getElementById('settingsModal').classList.add('open');
+  (org.disabled ? folder : org).focus();
+}
+
+function closeSettings() {
+  document.getElementById('settingsModal').classList.remove('open');
+}
+
+async function saveSettings() {
+  const locked = new Set((settingsSnapshot && settingsSnapshot.locked) || []);
+  const body = { labels: {} };
+  if (!locked.has('org_name'))    body.org_name    = document.getElementById('set-org').value;
+  if (!locked.has('data_folder')) body.data_folder = document.getElementById('set-folder').value;
+  document.querySelectorAll('#set-labels input').forEach(input => {
+    body.labels[input.dataset.key] = input.value;
+  });
+
+  let res;
+  try {
+    res = await fetch('/api/settings', {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+  } catch (e) {
+    showToast('Settings not saved — server unreachable', true);
+    return;
+  }
+  const data = await jsonOrNull(res);
+  if (!res.ok) {
+    showToast((data && data.error) || `Settings not saved (${res.status})`, true);
+    return;       // leave the dialog open so the edit is not lost
+  }
+  closeSettings();
+  await applySettings();
+  updateActivePill();   // the window title carries the organisation name
+  showToast(data && data.restart_needed
+    ? 'Saved — the new data folder applies when DayPunch restarts'
+    : 'Settings saved');
 }
 
 function appTitle() {

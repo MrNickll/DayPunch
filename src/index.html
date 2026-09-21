@@ -22,8 +22,17 @@
     <div class="header-spacer"></div>
     <div class="active-pill" id="activePill">
       <div class="dot"></div>
-      <span id="activePillText">RO — Line</span>
+      <span id="activePillText">Job — Line</span>
     </div>
+    <button class="btn-gear" id="btnSettings" onclick="openSettings()"
+            title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3"/>
+        <circle cx="12" cy="12" r="6.5"/>
+        <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>
+      </svg>
+    </button>
   </header>
 
   <div class="main">
@@ -306,6 +315,42 @@
     <div style="display:flex;gap:8px">
       <button class="btn-secondary" style="flex:1" onclick="closeRefModal()">Cancel</button>
       <button class="btn-primary"   style="flex:1" onclick="saveRefNote()">Save Note</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettings()">
+  <div class="modal modal-wide" role="dialog" aria-labelledby="settingsTitle">
+    <div class="modal-title" id="settingsTitle">SETTINGS</div>
+
+    <div class="settings-section">
+      <div class="form-group">
+        <div class="form-label">Organisation name</div>
+        <input class="form-input" id="set-org" maxlength="80"
+               placeholder="Shown in the window title — leave blank for none" />
+      </div>
+      <div class="form-group">
+        <div class="form-label">Data folder</div>
+        <input class="form-input" id="set-folder" spellcheck="false"
+               placeholder="Where the daily sheets are kept" />
+        <div class="settings-hint" id="set-folder-hint"></div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="section-label">FIELD LABELS</div>
+      <div class="settings-grid" id="set-labels"></div>
+      <div class="settings-hint">A blank label goes back to its default.</div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-hint" id="set-where"></div>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary" style="flex:1" onclick="closeSettings()">Cancel</button>
+      <button class="btn-primary"   style="flex:1" onclick="saveSettings()">Save</button>
     </div>
   </div>
 </div>

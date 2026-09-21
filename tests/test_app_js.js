@@ -66,7 +66,11 @@ function main(src) {
   var toasts = [];
   var setInterval = function () { return 0; }, clearInterval = function () {};
   var setTimeout = function (fn) { fn(); return 0; };   // run deferred work now
-  var fetch = function () { return new Promise(function () {}); };  // never settles
+  var fetchCalls = [];
+  var fetch = function (url, opts) {           // never settles; records what was asked
+    fetchCalls.push({ url: url, method: (opts && opts.method) || 'GET' });
+    return new Promise(function () {});
+  };
 
   var api = new Function(
     'document', 'window', 'navigator', 'console', 'fetch',
@@ -253,6 +257,22 @@ function main(src) {
   toasts.length = 0;
   key({ ctrlKey: true, key: 'x' });
   check('other Ctrl combos are left alone', toasts.length, 0);
+
+  out.push('\nSettings dialog');
+  toasts.length = 0;
+  fetchCalls.length = 0;
+  document.getElementById('settingsModal').classList.add('open');
+  key({ ctrlKey: true });
+  check('Ctrl+S in the settings dialog saves the settings',
+        fetchCalls.some(function (c) { return c.url === '/api/settings' && c.method === 'PUT'; }), true);
+  check('  ...and not the punch',
+        toasts.some(function (t) { return t.msg === 'Time is required'; }), false);
+  key({ key: 'Escape' });
+  check('Escape closes the settings dialog',
+        document.getElementById('settingsModal').classList.contains('open'), false);
+  toasts.length = 0;
+  key({ ctrlKey: true });
+  check('with it closed, Ctrl+S is back to saving the punch', toasts.pop().msg, 'Time is required');
 
   out.push('\n' + passed + ' passed, ' + failed + ' failed\n');
   return { text: out.join('\n'), failed: failed };

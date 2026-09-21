@@ -51,15 +51,22 @@ DEFAULTS = {
 }
 
 
+def _fresh_defaults():
+    """A copy of DEFAULTS that shares nothing with it. dict(DEFAULTS) alone
+    would hand back the very same labels dict, and anything that later edited
+    the live labels would quietly rewrite the defaults too."""
+    return {**DEFAULTS, "labels": dict(DEFAULTS["labels"])}
+
+
 def _load_settings():
     try:
         with open(SETTINGS_FILE, encoding="utf-8") as f:
             stored = json.load(f)
         if not isinstance(stored, dict):
-            return dict(DEFAULTS)
+            return _fresh_defaults()
     except (FileNotFoundError, ValueError, OSError):
-        return dict(DEFAULTS)
-    merged = dict(DEFAULTS)
+        return _fresh_defaults()
+    merged = _fresh_defaults()
     merged.update({k: v for k, v in stored.items() if k != "labels"})
     labels = dict(DEFAULTS["labels"])
     if isinstance(stored.get("labels"), dict):
@@ -108,6 +115,105 @@ LAST_PUNCH_ROW = 30
 PUNCH_ROWS = range(FIRST_PUNCH_ROW, LAST_PUNCH_ROW + 1)
 MAX_PUNCHES = LAST_PUNCH_ROW - FIRST_PUNCH_ROW + 1  # 29
 DATA_COLS = [2, 3, 4, 5, 8, 9, 10, 11, 12]  # B C D E H I J K L
+
+
+# ── Editing settings from the UI ──────────────────────────────────────────────
+ORG_NAME_MAX = 80
+LABEL_MAX = 40
+EDITABLE = {"data_folder", "org_name", "labels"}
+
+# Settings an environment variable pins. Saving over them would appear to work
+# and then not apply, so the settings screen shows them read-only instead.
+ENV_LOCKS = {"data_folder": "DAYPUNCH_FOLDER", "org_name": "DAYPUNCH_ORG"}
+
+
+class SettingsError(ValueError):
+    """An edit that cannot be stored; the message is shown to the user."""
+
+
+def locked_fields():
+    return sorted(k for k, var in ENV_LOCKS.items() if os.environ.get(var))
+
+
+def _validate_folder(raw):
+    path = os.path.expanduser(str(raw or "").strip())
+    if not path:
+        raise SettingsError("The data folder cannot be empty.")
+    if not os.path.isabs(path):
+        raise SettingsError("The data folder must be a full path, not a relative one.")
+    if os.path.exists(path) and not os.path.isdir(path):
+        raise SettingsError("That data folder path points at a file, not a folder.")
+    # The folder may not exist yet; it is created on next start. What has to be
+    # true now is that its nearest existing parent can be written to.
+    probe = path
+    while not os.path.exists(probe):
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            break
+        probe = parent
+    if not os.access(probe, os.W_OK):
+        raise SettingsError(f"DayPunch cannot write to {probe}.")
+    return os.path.normpath(path)
+
+
+def validate_settings(incoming):
+    """Check an edit from the settings screen; return the complete settings to
+    store. Only known keys are accepted, and a blank label means its default."""
+    if not isinstance(incoming, dict):
+        raise SettingsError("Settings must be sent as an object.")
+    unknown = set(incoming) - EDITABLE
+    if unknown:
+        raise SettingsError("Unknown setting: " + ", ".join(sorted(unknown)))
+    for key in locked_fields():
+        if key in incoming:
+            raise SettingsError(
+                f"{key} is set by the {ENV_LOCKS[key]} environment variable.")
+
+    result = _load_settings()          # start from disk, not from memory
+    if "data_folder" in incoming:
+        result["data_folder"] = _validate_folder(incoming["data_folder"])
+    if "org_name" in incoming:
+        name = str(incoming["org_name"] or "").strip()
+        if len(name) > ORG_NAME_MAX:
+            raise SettingsError(f"The organisation name is limited to {ORG_NAME_MAX} characters.")
+        result["org_name"] = name
+    if "labels" in incoming:
+        labels = incoming["labels"]
+        if not isinstance(labels, dict):
+            raise SettingsError("Labels must be sent as an object.")
+        bad = set(labels) - set(DEFAULTS["labels"])
+        if bad:
+            raise SettingsError("Unknown label: " + ", ".join(sorted(bad)))
+        merged = dict(result["labels"])
+        for key, value in labels.items():
+            text = str(value or "").strip()
+            if len(text) > LABEL_MAX:
+                raise SettingsError(f"Labels are limited to {LABEL_MAX} characters.")
+            merged[key] = text or DEFAULTS["labels"][key]
+        result["labels"] = merged
+    return result
+
+
+def save_settings(new):
+    """Write settings.json atomically, then refresh what is served live.
+
+    Labels and the organisation name take effect at once. The data folder is
+    read at start-up and captured by the modules that use it, so a change there
+    waits for the next launch.
+    """
+    global ORG_NAME
+    os.makedirs(APP_DATA_DIR, exist_ok=True)
+    tmp = SETTINGS_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(new, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, SETTINGS_FILE)     # a crash mid-write cannot truncate it
+
+    SETTINGS.clear()
+    SETTINGS.update(new)
+    LABELS.clear()
+    LABELS.update(new["labels"])
+    if not os.environ.get(ENV_LOCKS["org_name"]):
+        ORG_NAME = new["org_name"]
 
 
 def write_default_settings():

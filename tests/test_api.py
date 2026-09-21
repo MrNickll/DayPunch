@@ -157,6 +157,78 @@ check("labels come from settings, not the markup", settings["labels"]["ref_id"],
 check("  ...and the copy tab is neutral", settings["labels"]["copy_tab"], "TEXT")
 check("no employer name is baked in", settings["org_name"], "")
 
+# Every route refuses requests not addressed to this machine: the defence
+# against DNS rebinding, where a hostile name is re-pointed at 127.0.0.1.
+print("\nHost guard")
+def host_status(host):
+    return client.get("/api/settings", headers={"Host": host}).status_code
+check("localhost is served", host_status("localhost:5000"), 200)
+check("127.0.0.1 is served", host_status("127.0.0.1:5000"), 200)
+check("[::1] is served", host_status("[::1]:5000"), 200)
+check("another host name is refused", host_status("evil.example"), 403)
+check("  ...even one that starts with localhost", host_status("localhost.evil.example:5000"), 403)
+check("  ...on write routes too",
+      client.put("/api/settings", json={}, headers={"Host": "evil.example"}).status_code, 403)
+
+print("\nSettings")
+defaults_before = dict(config.DEFAULTS["labels"])
+current = client.get("/api/settings").get_json()
+check("reports where it stores its state", current["state_folder"], config.APP_DATA_DIR)
+check("the folder pinned by DAYPUNCH_FOLDER is reported locked", "data_folder" in current["locked"], True)
+
+r = client.put("/api/settings", data="org_name=x",
+               headers={"Content-Type": "application/x-www-form-urlencoded"})
+check("a non-JSON write is refused", r.status_code, 415)
+r = client.put("/api/settings", json={"port": 80})
+check("an unknown setting is refused", r.status_code, 400)
+r = client.put("/api/settings", json={"data_folder": "/tmp/elsewhere"})
+check("a field pinned by the environment is refused", r.status_code, 400)
+r = client.put("/api/settings", json={"labels": {"ref_id": "x" * 41}})
+check("an over-long label is refused", r.status_code, 400)
+r = client.put("/api/settings", json={"labels": {"not_a_label": "x"}})
+check("an unknown label is refused", r.status_code, 400)
+
+r = client.put("/api/settings", json={"org_name": "  Test Shop  ",
+                                      "labels": {"ref_id": "Case #", "job_number": ""}})
+check("a valid edit is accepted", r.status_code, 200)
+now = client.get("/api/settings").get_json()
+check("  ...labels apply without a restart", now["labels"]["ref_id"], "Case #")
+check("  ...so does the organisation name, trimmed", now["org_name"], "Test Shop")
+check("  ...a blank label goes back to its default",
+      now["labels"]["job_number"], config.DEFAULTS["labels"]["job_number"])
+import json as _json
+on_disk = _json.load(open(config.SETTINGS_FILE, encoding="utf-8"))
+check("  ...and settings.json on disk agrees", on_disk["labels"]["ref_id"], "Case #")
+check("the defaults themselves are left untouched", config.DEFAULTS["labels"], defaults_before)
+
+# The data folder is pinned in this test run; lift the pin to exercise it.
+pinned = os.environ.pop("DAYPUNCH_FOLDER")
+try:
+    new_folder = os.path.join(WORK, "moved", "daily")
+    r = client.put("/api/settings", json={"data_folder": new_folder})
+    check("changing the data folder is accepted", r.status_code, 200)
+    check("  ...and flagged as needing a restart", r.get_json().get("restart_needed"), True)
+    after = client.get("/api/settings").get_json()
+    check("  ...saved, while the old one stays in use until then",
+          (after["data_folder"], after["active_data_folder"]), (new_folder, config.FOLDER))
+finally:
+    os.environ["DAYPUNCH_FOLDER"] = pinned
+
+print("\nData folder validation")
+def folder_error(raw):
+    try:
+        config._validate_folder(raw)
+        return None
+    except config.SettingsError as e:
+        return str(e)
+check("a relative path is refused", folder_error("daily") is not None, True)
+check("an empty path is refused", folder_error("   ") is not None, True)
+a_file = os.path.join(WORK, "a-file.txt")
+open(a_file, "w").close()
+check("a path to a file is refused", folder_error(a_file) is not None, True)
+check("a folder that does not exist yet is fine", folder_error(os.path.join(WORK, "new", "deep")), None)
+check("~ is expanded", config._validate_folder("~/DayPunchTest").startswith(os.path.expanduser("~")), True)
+
 shutil.rmtree(WORK, ignore_errors=True)
 print(f"\n{passed} passed, {failed} failed\n")
 sys.exit(1 if failed else 0)

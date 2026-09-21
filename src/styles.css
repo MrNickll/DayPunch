@@ -42,6 +42,11 @@
   --on-green:    #ffffff;
   --on-accent2:  #2a1f00;
 
+  /* Elevation */
+  --scrim:       rgba(16, 19, 24, 0.32);
+  --shadow-bar:  0 1px 2px rgba(16, 19, 24, 0.04);
+  --shadow-pop:  0 6px 20px rgba(16, 19, 24, 0.12);
+
   --mono:       'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans:       'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --sans-light: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -70,7 +75,7 @@ body {
 header {
   background:    var(--surface);
   border-bottom: 1px solid var(--border);
-  box-shadow:    0 1px 2px rgba(16, 19, 24, 0.04);
+  box-shadow:    var(--shadow-bar);
   display:       flex;
   align-items:   center;
   padding:       0 20px;
@@ -676,7 +681,7 @@ header {
   padding:       4px 0;
   z-index:       300;
   min-width:     120px;
-  box-shadow:    0 4px 16px rgba(0,0,0,0.4);
+  box-shadow:    var(--shadow-pop);
 }
 .ref-context-item {
   padding:       7px 14px;
@@ -742,7 +747,7 @@ header {
 .modal-overlay {
   position:        fixed;
   inset:           0;
-  background:      rgba(0,0,0,0.6);
+  background:      var(--scrim);
   display:         flex;
   align-items:     center;
   justify-content: center;
@@ -893,7 +898,7 @@ header {
 }
 .resume-ro-picker.hover {
   border-color: var(--green);
-  background-color: rgba(61, 214, 140, 0.1);
+  background-color: var(--tint-green);
 }
 .resume-icon         { flex-shrink: 0; font-size: 13px; }
 #resumeBannerLabel   { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -918,7 +923,7 @@ header {
 
 .resume-picker-value.hover {
   border-color:     var(--green);
-  background-color: rgba(61, 214, 140, 0.1);
+  background-color: var(--tint-green);
 }
 
 #resumePickerPrefix {
@@ -1002,3 +1007,45 @@ header {
 ::-webkit-scrollbar       { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Settings ────────────────────────────────────────────────────────────── */
+.btn-gear {
+  width:           32px;
+  height:          32px;
+  flex:            0 0 32px;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  border:          1px solid var(--border);
+  border-radius:   8px;
+  background:      var(--surface);
+  color:           var(--muted);
+  cursor:          pointer;
+  transition:      color 0.15s, border-color 0.15s, background 0.15s;
+}
+.btn-gear:hover,
+.btn-gear:focus-visible { color: var(--accent); border-color: var(--accent); background: var(--tint-accent); outline: none; }
+.btn-gear svg { width: 18px; height: 18px; display: block; }
+
+.modal-wide { width: 620px; }
+.settings-section {
+  display:        flex;
+  flex-direction: column;
+  gap:            10px;
+  margin-bottom:  16px;
+}
+.settings-grid {
+  display:               grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:                   10px 12px;
+}
+@media (max-width: 560px) {
+  .settings-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.settings-hint {
+  font-family: var(--mono);
+  font-size:   11px;
+  color:       var(--muted);
+  line-height: 1.5;
+}
+.form-input:disabled { opacity: 0.6; cursor: not-allowed; }
