@@ -86,13 +86,14 @@ function main(src) {
       set editingRow(v) { editingRow = v; }, get editingRow() { return editingRow; },
       set lastModifiedTs(v) { lastModifiedTs = v; },
       set resumeSnapshot(v) { resumeSnapshot = v; },
-      set resumeRoList(v) { resumeRoList = v; },
+      set resumeRoList(v) { resumeRoList = v; }, get resumeRoList() { return resumeRoList; },
       set deferredExternalChange(v) { deferredExternalChange = v; },
       get formDirty() { return formDirty; },
       lastPunchIdx, openPunchIdx, activePunchIdx, isOpenStatus,
       currentDayDate, todayISO, readForm, buildCopyText, buildCopyTextFromForm,
       refreshDecision, markFormDirty, clearFormDirty, wireFormListeners,
       setFormValues, clearForm, offerResume, launchPunch, handleGlobalKeydown, reloadApp,
+      checkResumeFromPunches, declineResume, startNewPunch, abandonNewPunch,
       togglePunchLauncher, closePunchLauncher,
     };`
   )(document, window, navigator, console, fetch, setInterval, clearInterval, setTimeout, toasts,
@@ -290,6 +291,37 @@ function main(src) {
   confirmAnswer = true; reloads = 0;
   api.reloadApp();
   check('  ..."yes" reloads', reloads, 1);
+
+  // "New Punch > WI", then "Fresh" on the resume offer, used to save a W punch:
+  // declineResume() called clearForm(), which resets the status to W.
+  out.push('\nNew punch type and resume');
+  api.newPunchInProgress = false;
+  api.punches = [
+    { row: 2, date: '2026-09-21', time: '08:00', status: 'W', ro: '1042', odometer: '18400' },
+    { row: 3, date: '2026-09-21', time: '10:30', status: 'W', ro: '1077', odometer: '31220' },
+  ];
+  api.checkResumeFromPunches();
+  check('each resumable job keeps its own odometer',
+        api.resumeRoList.map(function (e) { return e.ro + ':' + e.odometer; }),
+        ['1077:31220', '1042:18400']);
+  api.newPunchInProgress = true;
+  api.offerResume('WI');
+  check('the resume offer keeps the picked type', fields['f-status'], 'WI');
+  check('  ...and prefills that job\'s odometer', fields['f-odo'], '31220');
+  var wheel = document._els['resumeRoNumber']._bag.list.filter(function (l) { return l.type === 'wheel'; })[0];
+  wheel.fn({ deltaY: 100, preventDefault: function () {} });
+  check('scrolling to an older job brings its own odometer, not the last one',
+        [fields['f-ro'], fields['f-odo']], ['1042', '18400']);
+  api.declineResume();
+  check('"Fresh" keeps the type picked in New Punch', fields['f-status'], 'WI');
+  check('  ...and the new punch stays in progress', api.activePunchIdx(), null);
+  api.abandonNewPunch();
+  check('abandoning it puts the running job back as active', api.activePunchIdx(), 1);
+
+  api.startNewPunch('DW');
+  check('a new punch without a resume offer keeps its type too', fields['f-status'], 'DW');
+  check('  ...and is marked in progress', api.activePunchIdx(), null);
+  api.abandonNewPunch();
 
   out.push('\n' + passed + ' passed, ' + failed + ' failed\n');
   return { text: out.join('\n'), failed: failed };

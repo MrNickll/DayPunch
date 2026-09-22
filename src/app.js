@@ -19,6 +19,7 @@ let newPunchInProgress = false;
 let formDirty            = false;   // entry form holds edits not yet in `punches`
 let deferredExternalChange = false; // file changed while we were holding off
 let settings = { app_name: 'DayPunch', org_name: '', labels: {} };
+let resumeStatus = null;             // the type picked in New Punch while "Resume?" is up
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 // Every input in the entry form, in one place: dirty tracking and the live copy
@@ -437,6 +438,7 @@ function setFormValues(p) {
 }
 
 function deselectPunch() {
+  abandonNewPunch();
   selectedRow = null;
   document.querySelectorAll('.punch-card').forEach(c => c.classList.remove('selected'));
   loadActivePunch();
@@ -577,6 +579,7 @@ async function autoSaveActivePunch() {
 
 // ── Punch selection ───────────────────────────────────────────────────────────
 async function selectPunch(idx) {
+  abandonNewPunch();
   await autoSaveActivePunch();
 
   document.querySelectorAll('.punch-card').forEach(c => c.classList.remove('selected'));
@@ -782,12 +785,29 @@ async function launchPunch(status) {
   newPunchInProgress = true;
   updateEntryTabHighlight();
   renderPunches();
-  if (!offerResume(status)) {
-    clearForm();
-    stampTimeNow();
-    document.getElementById('f-status').value = status;
-    switchTab('form');
-  }
+  if (!offerResume(status)) startNewPunch(status);
+}
+
+// A blank form for a new punch of the given type. clearForm() resets the status
+// to W and drops the in-progress flag, so both are put back afterwards. Missing
+// the first is what turned "New Punch > WI > Fresh" into a W punch; missing the
+// second meant the entry tab never showed a new punch was being filled in.
+function startNewPunch(status) {
+  clearForm();
+  stampTimeNow();
+  document.getElementById('f-status').value = status;
+  newPunchInProgress = true;
+  updateEntryTabHighlight();
+  switchTab('form');
+}
+
+// Leaving a new punch unsaved -- by picking a card, or clicking the empty list --
+// puts the running job back on screen as the active one.
+function abandonNewPunch() {
+  if (!newPunchInProgress) return;
+  newPunchInProgress = false;
+  updateEntryTabHighlight();
+  renderPunches();
 }
 
 async function savePunch() {
@@ -1140,22 +1160,29 @@ function checkResumeFromPunches() {
     if (!hasPrior) return;
   } else if (!['W', 'DW', 'WI'].includes(last.status)) return;
 
-  // Collect all unique ROs from W/DW/WI punches in reverse chronological order
-  const seenRos = new Set();
+  // Collect all unique ROs from W/DW/WI punches in reverse chronological order.
+  // Each keeps its own most recent odometer reading, so resuming an older job
+  // brings back that vehicle's mileage rather than whatever the last punch had.
+  const byRo = new Map();
   const roList = [];
   for (let i = punches.length - 1; i >= 0; i--) {
     const p = punches[i];
-    if (['W', 'DW', 'WI'].includes(p.status) && p.ro && !seenRos.has(p.ro)) {
-      seenRos.add(p.ro);
-      roList.push({
+    if (!['W', 'DW', 'WI'].includes(p.status) || !p.ro) continue;
+    let entry = byRo.get(p.ro);
+    if (!entry) {
+      entry = {
         ro: p.ro,
         line: p.line,
         description: p.description,
         opcode: p.opcode,
         refid: p.refid,
         warranty: p.warranty,
-      });
+        odometer: '',
+      };
+      byRo.set(p.ro, entry);
+      roList.push(entry);
     }
+    if (!entry.odometer && p.odometer) entry.odometer = p.odometer;
   }
 
   if (!roList.length) return;
@@ -1188,6 +1215,7 @@ function offerResume(status) {
 
   stampTimeNow();
   document.getElementById('f-status').value = status;
+  resumeStatus = status;
 
   // We are composing a NEW punch. deselectPunch() left editingRow pointing at
   // the last row, and without this a save would overwrite it instead of
@@ -1195,7 +1223,8 @@ function offerResume(status) {
   editingRow = null;
 
   const selected = resumeRoList[resumeRoIdx];
-  document.getElementById('f-ro').value = selected.ro || '';
+  document.getElementById('f-ro').value  = selected.ro || '';
+  document.getElementById('f-odo').value = selected.odometer || '';
 
   document.getElementById('f-line').value       = '';
   document.getElementById('f-desc').value       = '';
@@ -1236,7 +1265,8 @@ function initResumeRoPicker() {
 
     const selected = resumeRoList[resumeRoIdx];
     roSpan.textContent = selected.ro;
-    document.getElementById('f-ro').value = selected.ro;
+    document.getElementById('f-ro').value  = selected.ro;
+    document.getElementById('f-odo').value = selected.odometer || '';
     markFormDirty();
   });
 }
@@ -1250,8 +1280,7 @@ function confirmResume() {
 function declineResume() {
   resumeSnapshot = null;
   document.getElementById('resumeBanner').style.display = 'none';
-  clearForm();
-  stampTimeNow();
+  startNewPunch(resumeStatus || 'W');
 }
 
 // ── Reference panel ───────────────────────────────────────────────────────────
