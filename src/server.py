@@ -60,7 +60,8 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS [OP-Codes] (
     ID          INTEGER PRIMARY KEY AUTOINCREMENT,
     Code        TEXT DEFAULT '',
-    Description TEXT NOT NULL
+    Description TEXT NOT NULL,
+    Type        TEXT DEFAULT ''     -- parent punch type: W, DW, WI, or '' for none
 );
 CREATE TABLE IF NOT EXISTS Ref_Notes (
     ID       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,6 +114,47 @@ class _Connection:
         self._conn.close()
 
 
+# A parent type is a rule, not a record of past use: set only where an OP-code
+# can never be anything else ("Training" is always WI), and left blank for the
+# many jobs that can start as DW and finish as W.
+PARENT_TYPES = ("W", "DW", "WI")
+
+
+def _columns(conn, table):
+    """PRAGMA table_info rows keyed by column name:
+    (cid, name, type, notnull, default, pk)."""
+    return {row[1]: row for row in conn.execute(f"PRAGMA table_info([{table}])")}
+
+
+def _migrate(conn):
+    """Bring a database from an older version up to date without losing
+    anything. CREATE TABLE IF NOT EXISTS never alters a table that is already
+    there, so a new column has to be added here explicitly."""
+    if "Type" not in _columns(conn, "OP-Codes"):
+        conn.execute("ALTER TABLE [OP-Codes] ADD COLUMN Type TEXT DEFAULT ''")
+        log.info("added the Type column to OP-Codes")
+
+
+def schema_warnings(conn):
+    """Problems a hand-converted database can carry that break editing.
+
+    SQLite only numbers new rows itself when ID is declared exactly
+    INTEGER PRIMARY KEY. Converted as a plain INTEGER, or as INT PRIMARY KEY,
+    rows added later get no ID -- and anything edited or deleted by ID cannot
+    reach them.
+    """
+    warnings = []
+    for table in ("OP-Codes", "Ref_Notes", "Story_Templates"):
+        idcol = _columns(conn, table).get("ID")
+        if not idcol or idcol[5] != 1 or (idcol[2] or "").upper() != "INTEGER":
+            warnings.append(f"{table}: ID is not INTEGER PRIMARY KEY, so new rows "
+                            "get no ID and cannot be edited or deleted.")
+        orphans = conn.execute(f"SELECT COUNT(*) FROM [{table}] WHERE ID IS NULL").fetchone()[0]
+        if orphans:
+            warnings.append(f"{table}: {orphans} row(s) have no ID and cannot be edited or deleted.")
+    return warnings
+
+
 def init_db():
     """Create the database on first run and seed it. Returns True if it was new."""
     folder = os.path.dirname(DB_PATH)
@@ -121,6 +163,9 @@ def init_db():
     fresh = not os.path.exists(DB_PATH)
     with closing(sqlite3.connect(DB_PATH)) as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
+        for warning in schema_warnings(conn):
+            log.warning("database: %s", warning)
         if fresh and config.SEED_REF_NOTES:
             conn.executemany(
                 "INSERT INTO Ref_Notes (Category, [Key], [Value], Tags) VALUES (?, ?, ?, ?)",
@@ -436,9 +481,11 @@ def get_templates():
     try:
         with closing(get_db()) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT [Value], Tags FROM Story_Templates ORDER BY Category, [Key]")
-            templates = [{"value": row[0], "tags": row[1] or ""}
-                         for row in cursor.fetchall() if row[0]]
+            cursor.execute("SELECT [Key], [Value], Tags FROM Story_Templates ORDER BY Category, [Key]")
+            # key is the variant's name ("Winter tires"), which the Description
+            # field offers as a choice; tags carry the OP-code it belongs to.
+            templates = [{"key": row[0] or "", "value": row[1], "tags": row[2] or ""}
+                         for row in cursor.fetchall() if row[1]]
         return jsonify(templates)
     except Exception:
         log.exception("get_templates failed")
@@ -461,8 +508,9 @@ def get_opcodes():
     try:
         with closing(get_db()) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT [Code], [Description] FROM [OP-Codes] ORDER BY [Description]")
-            codes = [{"code": row[0] or "", "desc": row[1] or ""}
+            cursor.execute("SELECT ID, [Code], [Description], Type FROM [OP-Codes] ORDER BY [Description]")
+            codes = [{"id": row[0], "code": row[1] or "", "desc": row[2] or "",
+                      "type": (row[3] or "").upper()}
                      for row in cursor.fetchall()]
         return jsonify(codes)
     except Exception:
@@ -517,6 +565,63 @@ def _insert_refnote(conn, category, key, value, tags):
         category, key, value, tags
     )
     return {"ok": True}
+
+
+@app.route("/api/opcodes", methods=["PUT"])
+def update_opcode():
+    """Edit an OP-code from the REF panel: its code, description and parent type."""
+    if not request.is_json:
+        return jsonify({"error": "Expected application/json."}), 415
+    entry = request.get_json(silent=True) or {}
+    try:
+        op_id = int(entry.get("id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "No OP-code id."}), 400
+    code = (entry.get("code") or "").strip()
+    desc = (entry.get("desc") or "").strip()
+    kind = (entry.get("type") or "").strip().upper()
+    if not desc:
+        return jsonify({"error": "The description cannot be empty."}), 400
+    if kind and kind not in PARENT_TYPES:
+        return jsonify({"error": "The parent type must be W, DW, WI, or none."}), 400
+    try:
+        with closing(get_db()) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT ID, [Code], [Description] FROM [OP-Codes]")
+            rows = cursor.fetchall()
+            if not any(r[0] == op_id for r in rows):
+                return jsonify({"error": "That OP-code no longer exists."}), 404
+            # The automatic learning relies on descriptions and codes being
+            # unique, so an edit may not make two rows collide.
+            for r in rows:
+                if r[0] == op_id:
+                    continue
+                if (r[2] or "").strip().lower() == desc.lower():
+                    return jsonify({"error": f'"{desc}" is already another OP-code.'}), 409
+                if code and (r[1] or "").strip().lower() == code.lower():
+                    return jsonify({"error": f'{code} already belongs to "{r[2]}".'}), 409
+            cursor.execute("UPDATE [OP-Codes] SET [Code]=?, [Description]=?, Type=? WHERE ID=?",
+                           code, desc, kind, op_id)
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        log.exception("update_opcode failed")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/opcodes", methods=["DELETE"])
+def delete_opcode():
+    op_id = request.args.get("id", type=int)
+    if not op_id:
+        return jsonify({"error": "No OP-code id."}), 400
+    try:
+        with closing(get_db()) as conn:
+            conn.cursor().execute("DELETE FROM [OP-Codes] WHERE ID=?", op_id)
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        log.exception("delete_opcode failed")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/opcodes", methods=["POST"])
@@ -644,7 +749,10 @@ def db_status():
             opcodes = cur.fetchone()[0]
             cur.execute("SELECT COUNT(*) FROM Ref_Notes")
             notes = cur.fetchone()[0]
-        return jsonify({"db_ok": True, "opcodes": opcodes, "notes": notes})
+        with closing(sqlite3.connect(DB_PATH)) as raw:
+            warnings = schema_warnings(raw)
+        return jsonify({"db_ok": True, "opcodes": opcodes, "notes": notes,
+                        "warnings": warnings})
     except Exception as e:
         log.exception("db_status failed")
         return jsonify({"db_ok": False, "error": str(e)})

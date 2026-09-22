@@ -280,6 +280,87 @@ srv.shutdown()
 srv.server_close()
 squatter.close()
 
+# A database made before the Type column existed -- like one converted by hand
+# from Access -- must gain it on start-up without losing a row.
+print("\nMigration")
+old_db = os.path.join(WORK, "old-schema.sqlite3")
+raw = sqlite3.connect(old_db)
+raw.executescript("""
+CREATE TABLE [OP-Codes] (ID INTEGER PRIMARY KEY AUTOINCREMENT, Code TEXT, Description TEXT);
+CREATE TABLE Ref_Notes (ID INTEGER PRIMARY KEY AUTOINCREMENT, Category TEXT, [Key] TEXT, [Value] TEXT, Tags TEXT);
+CREATE TABLE Story_Templates (ID INTEGER PRIMARY KEY AUTOINCREMENT, [Value] TEXT, Category TEXT, [Key] TEXT, Tags TEXT);
+INSERT INTO [OP-Codes] (Code, Description) VALUES ('S-T', 'Service Tires');
+""")
+raw.commit(); raw.close()
+real_db = server.DB_PATH
+server.DB_PATH = old_db
+try:
+    server.init_db()
+    raw = sqlite3.connect(old_db)
+    cols = [r[1] for r in raw.execute("PRAGMA table_info([OP-Codes])")]
+    check("an old database gains the Type column", "Type" in cols, True)
+    check("  ...keeping its rows",
+          raw.execute("SELECT Code, Description, Type FROM [OP-Codes]").fetchall(),
+          [("S-T", "Service Tires", "")])
+    check("  ...with no warnings when IDs are sound", server.schema_warnings(raw), [])
+    raw.close()
+    server.init_db()                       # running it twice must be harmless
+    check("migrating twice is harmless", True, True)
+finally:
+    server.DB_PATH = real_db
+
+# A conversion that made ID a plain INTEGER leaves new rows without an ID.
+bad = sqlite3.connect(":memory:")
+bad.executescript("""
+CREATE TABLE [OP-Codes] (ID INTEGER, Code TEXT, Description TEXT, Type TEXT);
+CREATE TABLE Ref_Notes (ID INT PRIMARY KEY, Category TEXT, [Key] TEXT, [Value] TEXT, Tags TEXT);
+CREATE TABLE Story_Templates (ID INTEGER PRIMARY KEY, [Value] TEXT, Category TEXT, [Key] TEXT, Tags TEXT);
+INSERT INTO [OP-Codes] (Code, Description) VALUES ('X', 'Added after conversion');
+""")
+w = server.schema_warnings(bad)
+check("a plain INTEGER ID is flagged", any(x.startswith("OP-Codes: ID is not") for x in w), True)
+check("  ...so are the rows it left without one", any("1 row(s) have no ID" in x for x in w), True)
+check("  ...and INT PRIMARY KEY, which SQLite does not number", any(x.startswith("Ref_Notes") for x in w), True)
+check("  ...but not a proper INTEGER PRIMARY KEY", any(x.startswith("Story_Templates") for x in w), False)
+bad.close()
+check("/api/dbstatus reports warnings (none here)", client.get("/api/dbstatus").get_json()["warnings"], [])
+
+print("\nOP-code editing")
+post_opcode("S-T", "Service Tires")
+post_opcode("TRN-A", "Training Aston")
+codes = {o["desc"]: o for o in client.get("/api/opcodes").get_json()}
+check("OP-codes come with an id and a parent type",
+      sorted(codes["Service Tires"]), ["code", "desc", "id", "type"])
+check("  ...no parent type until one is set", codes["Training Aston"]["type"], "")
+tid = codes["Training Aston"]["id"]
+
+def put_opcode(**kw):
+    return client.put("/api/opcodes", json=kw)
+r = put_opcode(id=tid, code="TRN-A", desc="Training Aston", type="wi")
+check("a parent type can be set", r.status_code, 200)
+check("  ...and is stored upper-case",
+      {o["desc"]: o["type"] for o in client.get("/api/opcodes").get_json()}["Training Aston"], "WI")
+check("an unknown parent type is refused", put_opcode(id=tid, code="TRN-A", desc="Training Aston", type="X").status_code, 400)
+check("an empty description is refused", put_opcode(id=tid, code="TRN-A", desc=" ", type="").status_code, 400)
+check("a description already taken is refused",
+      put_opcode(id=tid, code="TRN-A", desc="service tires", type="").status_code, 409)
+check("a code already taken is refused",
+      put_opcode(id=tid, code="s-t", desc="Training Aston", type="").status_code, 409)
+check("an OP-code that no longer exists is reported", put_opcode(id=99999, code="", desc="x", type="").status_code, 404)
+check("a non-JSON edit is refused",
+      client.put("/api/opcodes", data="id=1", content_type="application/x-www-form-urlencoded").status_code, 415)
+r = client.delete(f"/api/opcodes?id={tid}")
+check("an OP-code can be deleted", (r.status_code, "Training Aston" in
+      [o["desc"] for o in client.get("/api/opcodes").get_json()]), (200, False))
+check("automatic learning still leaves the type blank",
+      {o["desc"]: o["type"] for o in client.get("/api/opcodes").get_json()}["Service Tires"], "")
+
+client.post("/api/refnotes", json={"category": "Story", "key": "Winter tires",
+                                   "value": "Installed four winter tires.", "tags": "S-T"})
+tpl = [t for t in client.get("/api/templates").get_json() if t["key"] == "Winter tires"]
+check("story templates carry their name, for use as variants",
+      (tpl[0]["key"], tpl[0]["tags"]) if tpl else None, ("Winter tires", "S-T"))
+
 shutil.rmtree(WORK, ignore_errors=True)
 print(f"\n{passed} passed, {failed} failed\n")
 sys.exit(1 if failed else 0)
