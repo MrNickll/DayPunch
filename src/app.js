@@ -814,6 +814,9 @@ function startNewPunch(status) {
   newPunchInProgress = true;
   updateEntryTabHighlight();
   switchTab('form');
+  // Time and status are already filled in; the first thing to type is what
+  // the job is.
+  document.getElementById('f-desc').focus();
 }
 
 // Leaving a new punch unsaved -- by picking a card, or clicking the empty list --

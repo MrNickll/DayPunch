@@ -352,6 +352,7 @@ function main(src) {
   prompt('WI');
   key({ key: 'n' });
   check('N starts fresh, keeping the picked type', [api.resumePromptOpen(), fields['f-status']], [false, 'WI']);
+  check('  ...landing straight in Description too', document.activeElement.id, 'f-desc');
   api.abandonNewPunch();
 
   prompt('W');

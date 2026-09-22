@@ -467,7 +467,10 @@ header {
 .form-col-main > .form-group,
 .form-col-main > .form-row,
 .form-col-main > .checkbox-row { flex: 0 0 auto; }
-.form-col-story .form-group  { flex: 1; min-height: 0; }
+.form-col-story { gap: 12px; }
+/* Only the notes grow to fill the column; the ticket field below keeps its size. */
+.form-col-story > .story-group { flex: 1; min-height: 0; }
+.form-col-story > .form-group:not(.story-group) { flex: 0 0 auto; }
 .form-col-story .story-wrap  { flex: 1; min-height: 0; display: flex; }
 .form-col-story .form-textarea { flex: 1; min-height: 180px; resize: none; }
 

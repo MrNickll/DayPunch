@@ -83,14 +83,17 @@
 
         <div class="punch-form" id="punchForm">
          <div class="form-col-main">
+          <!-- Tab order follows the DOM: Description, Job, Line, Warranty, OP-Code,
+               Odometer, then Story and Ticket in the right-hand column. Time and
+               Status are filled in for you, so Tab skips them; they stay clickable. -->
           <div class="form-row">
             <div class="form-group" style="max-width:115px">
               <div class="form-label">Time</div>
-              <input class="form-input" id="f-time" type="time" />
+              <input class="form-input" id="f-time" type="time" tabindex="-1" />
             </div>
             <div class="form-group" style="max-width:130px">
               <div class="form-label">Status</div>
-              <select class="form-select" id="f-status">
+              <select class="form-select" id="f-status" tabindex="-1">
                 <option value="W">W — Working</option>
                 <option value="DW">DW — Diagnostic</option>
                 <option value="WI">WI — Indirect</option>
@@ -98,6 +101,15 @@
                 <option value="B">B — Break</option>
                 <option value="C">C — Clocked Out</option>
               </select>
+            </div>
+          </div>
+
+          <!-- Bidirectional OP-code lookup -->
+          <div class="form-group">
+            <div class="form-label">Description</div>
+            <div class="opcode-wrap">
+              <input class="form-input" id="f-desc" type="text" placeholder="Type description or OP-code…" autocomplete="off" />
+              <div class="opcode-dropdown" id="opcodeDropdown"></div>
             </div>
           </div>
 
@@ -112,13 +124,9 @@
             </div>
           </div>
 
-          <!-- Bidirectional OP-code lookup -->
-          <div class="form-group">
-            <div class="form-label">Description</div>
-            <div class="opcode-wrap">
-              <input class="form-input" id="f-desc" type="text" placeholder="Type description or OP-code…" autocomplete="off" />
-              <div class="opcode-dropdown" id="opcodeDropdown"></div>
-            </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="f-warranty" />
+            <label for="f-warranty" data-label="warranty">Warranty work</label>
           </div>
 
           <div class="form-group">
@@ -130,29 +138,23 @@
           </div>
 
           <div class="form-group">
-            <div class="form-label" data-label="ref_id">Ticket Number</div>
-            <input class="form-input" id="f-ref" type="text" placeholder="Ticket #" />
-          </div>
-
-          <div class="form-group">
             <div class="form-label">Odometer</div>
             <input class="form-input" id="f-odo" type="number" placeholder="km" />
           </div>
-
-          <div class="checkbox-row">
-            <input type="checkbox" id="f-warranty" />
-            <label for="f-warranty" data-label="warranty">Warranty work</label>
-          </div>
-
          </div><!-- /form-col-main -->
 
          <div class="form-col-story">
-          <div class="form-group">
+          <div class="form-group story-group">
             <div class="form-label">Story / Notes</div>
             <div class="story-wrap">
               <textarea class="form-textarea" id="f-story" placeholder="Work performed notes…"></textarea>
               <div class="story-dropdown" id="storyDropdown"></div>
             </div>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label" data-label="ref_id">Ticket Number</div>
+            <input class="form-input" id="f-ref" type="text" placeholder="Ticket #" />
           </div>
          </div><!-- /form-col-story -->
 
