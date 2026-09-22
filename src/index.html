@@ -278,8 +278,8 @@
 <!-- Delete confirmation modal -->
 <div class="modal-overlay" id="deleteModal" onclick="if(event.target===this)closeDeleteModal()">
   <div class="modal">
-    <div class="modal-title" style="color:var(--red)">DELETE PUNCH</div>
-    <p>Are you sure you want to delete this punch?</p>
+    <div class="modal-title" style="color:var(--red)" id="deleteModalTitle">DELETE</div>
+    <p id="deleteModalText">Are you sure?</p>
     <div class="modal-label" id="deleteModalLabel"></div>
     <div style="display:flex;gap:8px">
       <button class="btn-secondary" style="flex:1" onclick="closeDeleteModal()">Cancel</button>
@@ -353,6 +353,39 @@
     </div>
   </div>
 </div>
+<!-- OP-code editor -->
+<div class="modal-overlay" id="opcodeModal" onclick="if(event.target===this)closeOpcodeModal()">
+  <div class="modal" role="dialog" aria-labelledby="opcodeModalTitle">
+    <div class="modal-title" id="opcodeModalTitle">EDIT OP-CODE</div>
+    <input type="hidden" id="oc-id" />
+    <div class="form-group" style="margin-bottom:10px">
+      <div class="form-label">Code</div>
+      <input class="form-input" id="oc-code" spellcheck="false" placeholder="e.g. S-T" />
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <div class="form-label">Description</div>
+      <input class="form-input" id="oc-desc" placeholder="e.g. Service Tires" />
+    </div>
+    <div class="form-group" style="margin-bottom:6px">
+      <div class="form-label">Parent type</div>
+      <select class="form-select" id="oc-type">
+        <option value="">None — the punch keeps its own status</option>
+        <option value="W">W — Working</option>
+        <option value="DW">DW — Diagnostic</option>
+        <option value="WI">WI — Indirect</option>
+      </select>
+    </div>
+    <div class="settings-hint" style="margin-bottom:14px">
+      Set one only when this OP-code can never be anything else. Picking it then
+      sets the punch status; an OP-code without one never changes it.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary" style="flex:1" onclick="closeOpcodeModal()">Cancel</button>
+      <button class="btn-primary"   style="flex:1" onclick="saveOpcode()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Resume prompt: owns the page while it is up (the app behind is inert) -->
 <div class="modal-overlay" id="resumeModal">
   <div class="modal modal-resume" role="alertdialog" aria-labelledby="resumeQuestion"

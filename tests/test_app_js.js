@@ -48,7 +48,7 @@ function main(src) {
       addEventListener(t, f) { bag.add(t, f); },
       removeEventListener(t, f) { bag.remove(t, f); },
       querySelectorAll() { return []; }, querySelector() { return null; },
-      appendChild() {}, remove() {}, contains() { return false; },
+      appendChild() {}, append() {}, remove() {}, contains() { return false; },
       focus() { document.activeElement = this; },
     };
   }
@@ -89,6 +89,7 @@ function main(src) {
       set lastModifiedTs(v) { lastModifiedTs = v; },
       set resumeSnapshot(v) { resumeSnapshot = v; },
       set resumeRoList(v) { resumeRoList = v; }, get resumeRoList() { return resumeRoList; },
+      set opcodes(v) { opcodes = v; }, set templates(v) { templates = v; },
       set deferredExternalChange(v) { deferredExternalChange = v; },
       get formDirty() { return formDirty; },
       lastPunchIdx, openPunchIdx, activePunchIdx, isOpenStatus,
@@ -97,6 +98,7 @@ function main(src) {
       setFormValues, clearForm, offerResume, launchPunch, handleGlobalKeydown, reloadApp,
       checkResumeFromPunches, declineResume, startNewPunch, abandonNewPunch,
       confirmResume, resumePromptOpen,
+      selectOpcode, selectVariant, variantsOf, descriptionChoices, deleteRefNote, deleteOpcode,
       togglePunchLauncher, closePunchLauncher,
     };`
   )(document, window, navigator, console, fetch, setInterval, clearInterval, setTimeout, toasts,
@@ -376,6 +378,65 @@ function main(src) {
   check('Ctrl+S cannot save the half-filled punch behind the prompt',
         fetchCalls.some(function (c) { return c.url === '/api/punches'; }), false);
   api.confirmResume();
+
+  // OP-codes are fixed; what varies is the job within one. A variant is a story
+  // template tied to an OP-code, and a parent type is a rule that only ever sets
+  // the status -- never clears it.
+  out.push('\nVariants and parent types');
+  api.opcodes = [
+    { id: 1, code: 'S-T',   desc: 'Service Tires',        type: 'W'  },
+    { id: 2, code: 'TRN-A', desc: 'Training Aston',       type: 'WI' },
+    { id: 3, code: 'DIAG',  desc: 'Electrical diagnosis', type: ''   },
+  ];
+  api.templates = [
+    { key: 'Winter tires', value: 'Installed four winter tires.', tags: 'S-T'      },
+    { key: '1 tire',       value: 'Replaced one tire.',           tags: 'S-T'      },
+    { key: 'Training',     value: 'Attended training.',           tags: 'TRN-A'    },
+    { key: 'RTNFF',        value: 'Road tested, no fault found.', tags: 'roadtest' },
+  ];
+  check('an OP-code lists its variants',
+        api.variantsOf('S-T').map(function (t) { return t.key; }), ['Winter tires', '1 tire']);
+  check('a generic story snippet is not offered as a description',
+        api.descriptionChoices('rtnff').length, 0);
+  check('typing a variant name offers it, with the code it belongs to',
+        api.descriptionChoices('winter').map(function (c) { return c.kind + ':' + c.code + ':' + c.label; }),
+        ['variant:S-T:Winter tires']);
+
+  api.clearForm(); fields['f-status'] = 'DW'; toasts.length = 0;
+  api.selectVariant(api.variantsOf('S-T')[0]);
+  check('choosing a variant fills the description, the code and its own story',
+        [fields['f-desc'], fields['f-opcode'], fields['f-story']],
+        ['Winter tires', 'S-T', 'Installed four winter tires.']);
+  check('  ...and the parent type sets the status', fields['f-status'], 'W');
+  check('  ...saying so', toasts.some(function (t) { return /Status set to W/.test(t.msg); }), true);
+
+  api.clearForm();
+  api.selectOpcode('S-T', 'Service Tires');
+  check('an OP-code with several variants fills in no story rather than guess', fields['f-story'], '');
+  check('  ...and offers the variants instead',
+        document.getElementById('opcodeDropdown')._matches.map(function (m) { return m.label; }),
+        ['Winter tires', '1 tire']);
+
+  api.clearForm();
+  api.selectOpcode('TRN-A', 'Training Aston');
+  check('an OP-code with a single variant fills its story', fields['f-story'], 'Attended training.');
+  check('  ...and a WI parent makes it a WI punch', fields['f-status'], 'WI');
+
+  api.clearForm(); fields['f-status'] = 'DW';
+  api.selectOpcode('DIAG', 'Electrical diagnosis');
+  check('an OP-code without a parent type leaves the status alone', fields['f-status'], 'DW');
+  api.clearForm();
+
+  // The delete dialog's title was fixed to "DELETE PUNCH", so deleting a note
+  // asked whether to delete a punch.
+  api.deleteRefNote({ category: 'Tools', key: 'Roloc', row: 1, sheet: 'Ref_Notes' });
+  check('deleting a note asks about a note, not a punch',
+        document.getElementById('deleteModalTitle').textContent, 'DELETE NOTE');
+  api.deleteOpcode({ id: 2, code: 'TRN-A', desc: 'Training Aston' });
+  check('  ...and an OP-code about an OP-code',
+        [document.getElementById('deleteModalTitle').textContent,
+         document.getElementById('deleteModalLabel').textContent],
+        ['DELETE OP-CODE', 'TRN-A — Training Aston']);
 
   out.push('\n' + passed + ' passed, ' + failed + ' failed\n');
   return { text: out.join('\n'), failed: failed };

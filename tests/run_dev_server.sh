@@ -24,8 +24,9 @@ export DAYPUNCH_PORT="${DAYPUNCH_PORT:-5000}"
 
 cd "$SRC"
 exec "$VENV/bin/python" -c "
-import logging, config, daily_file, server
-logging.basicConfig(level=logging.INFO)
+import logging
+logging.basicConfig(level=logging.INFO)   # before importing server: it migrates on import
+import config, daily_file, server
 daily_file.create_daily_file()
 srv = server.bind_server(config.PORT)
 print('DayPunch', config.VERSION, '| data:', config.FOLDER, '| db:', config.DB_PATH)

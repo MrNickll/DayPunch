@@ -19,7 +19,8 @@ let newPunchInProgress = false;
 let formDirty            = false;   // entry form holds edits not yet in `punches`
 let deferredExternalChange = false; // file changed while we were holding off
 let settings = { app_name: 'DayPunch', org_name: '', labels: {} };
-let resumeStatus = null;             // the type picked in New Punch while "Resume?" is up
+let resumeStatus = null;
+let dbWarningShown = false;         // schema warnings are shown once, not every poll             // the type picked in New Punch while "Resume?" is up
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 // Every input in the entry form, in one place: dirty tracking and the live copy
@@ -71,9 +72,14 @@ function handleGlobalKeydown(e) {
   // an OP-code and a prebuilt story. The Ref note modal is the one thing that
   // takes the shortcut over while it is open.
   const settingsOpen = document.getElementById('settingsModal').classList.contains('open');
+  const opcodeOpen   = document.getElementById('opcodeModal').classList.contains('open');
 
   if (e.key === 'Escape' && settingsOpen) {
     closeSettings();
+    return;
+  }
+  if (e.key === 'Escape' && opcodeOpen) {
+    closeOpcodeModal();
     return;
   }
 
@@ -81,6 +87,7 @@ function handleGlobalKeydown(e) {
     e.preventDefault();   // also stops WebView2's own "save page" dialog
     // An open dialog owns the shortcut; otherwise it saves the punch.
     if (settingsOpen) saveSettings();
+    else if (opcodeOpen) saveOpcode();
     else if (document.getElementById('refModal').classList.contains('open')) saveRefNote();
     else savePunch();
     return;
@@ -159,19 +166,6 @@ async function loadOpcodes() {
 async function loadTemplates() {
   const res = await fetch('/api/templates');
   templates = await res.json();
-}
-
-function autofillStoryFromOpcode(code) {
-  if (!code) return;
-  const normalize = s => s.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
-  const q = normalize(code);
-  const match = templates.find(t =>
-    t.tags && t.tags.split(',').map(s => normalize(s)).includes(q)
-  );
-  if (!match) return;
-  const ta = document.getElementById('f-story');
-  const existing = ta.value.trim();
-  ta.value = existing ? existing + '\n' + match.value : match.value;
 }
 
 async function loadRefNotes() {
@@ -609,15 +603,24 @@ async function selectPunch(idx) {
 }
 
 // ── Delete punch ──────────────────────────────────────────────────────────────
+// One confirmation dialog for punches, notes and OP-codes. Its title used to be
+// fixed to "DELETE PUNCH", so deleting a note asked about deleting a punch.
+function askDelete(title, text, label, onConfirm) {
+  document.getElementById('deleteModalTitle').textContent = title;
+  document.getElementById('deleteModalText').textContent  = text;
+  document.getElementById('deleteModalLabel').textContent = label;
+  document.getElementById('deleteConfirmBtn').onclick = onConfirm;
+  document.getElementById('deleteModal').classList.add('open');
+}
+
 function deletePunch(e, idx) {
   e.stopPropagation();
   const p     = punches[idx];
   const label = p.ro
     ? `#${p.ro} / ${p.line} — ${p.description || ''} at ${p.time}`
     : `${p.description} at ${p.time}`;
-  document.getElementById('deleteModalLabel').textContent = label;
-  document.getElementById('deleteConfirmBtn').onclick = () => confirmDelete(idx);
-  document.getElementById('deleteModal').classList.add('open');
+  askDelete('DELETE PUNCH', 'Are you sure you want to delete this punch?', label,
+            () => confirmDelete(idx));
 }
 
 async function confirmDelete(idx) {
@@ -867,105 +870,184 @@ async function savePunch() {
 }
 
 // ── OP-code autocomplete (bidirectional) ──────────────────────────────────────
-function initOpcodeAutocomplete() {
-  const descInput          = document.getElementById('f-desc');
-  const opcodeInput        = document.getElementById('f-opcode');
-  const dropdown           = document.getElementById('opcodeDropdown');
-  const opcodeCodeDropdown = document.getElementById('opcodeCodeDropdown');
-  let activeIdx  = -1;
-  let activeIdx2 = -1;
+// ── OP-codes, variants and parent types ───────────────────────────────────────
+// OP-codes are fixed operations -- dealer or manufacturer SROs -- so what varies
+// is the job within one: "Winter tires" and "1 tire" are both S-T. A variant is
+// a story template tied to an OP-code by its tags. Choosing it fills in the
+// description, the code, and that variant's story rather than whichever
+// template for the code happened to come first.
+const normCode = v => (v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  function buildDropdown(el, ddEl, matches, idxRef, setIdx) {
-    el._matches = matches;
-    ddEl.innerHTML = matches.map((o, i) =>
-      `<div class="opcode-item" data-idx="${i}">
-        <span class="oc">${o.code}</span><span class="od">${o.desc}</span>
-      </div>`
-    ).join('');
-    ddEl.style.display = 'block';
-    setIdx(-1);
-    ddEl.querySelectorAll('.opcode-item').forEach(item => {
-      item.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        selectOpcode(matches[+item.dataset.idx].code, matches[+item.dataset.idx].desc);
-      });
-    });
+function findOpcode(code) {
+  const q = normCode(code);
+  return q ? opcodes.find(o => normCode(o.code) === q) : undefined;
+}
+
+function opcodeOfVariant(t) {
+  for (const tag of (t.tags || '').split(',')) {
+    const oc = findOpcode(tag);
+    if (oc) return oc;
   }
+  return null;
+}
 
-  function updateActive(ddEl, idx) {
-    ddEl.querySelectorAll('.opcode-item').forEach((el, i) =>
-      el.classList.toggle('active', i === idx)
-    );
-  }
+// Only templates tied to an OP-code count as variants. A generic snippet --
+// "Road tested, no fault found" -- stays a story snippet, not a job description.
+function variantsOf(code) {
+  const q = normCode(code);
+  if (!q) return [];
+  return templates.filter(t => t.key && (t.tags || '').split(',').some(tag => normCode(tag) === q));
+}
 
-  function handleKeys(e, ddEl, matches, getIdx, setIdx) {
-    if (ddEl.style.display === 'none') return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setIdx(Math.min(getIdx() + 1, matches.length - 1));
-      updateActive(ddEl, getIdx());
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setIdx(Math.max(getIdx() - 1, 0));
-      updateActive(ddEl, getIdx());
-    } else if (e.key === 'Enter' && getIdx() >= 0) {
-      e.preventDefault();
-      selectOpcode(matches[getIdx()].code, matches[getIdx()].desc);
-    } else if (e.key === 'Escape') {
-      ddEl.style.display = 'none';
-      setIdx(-1);
+// A parent type only ever sets the status. An OP-code without one leaves the
+// status exactly as it was.
+function applyParentType(code) {
+  const oc = findOpcode(code);
+  if (!oc || !oc.type) return;
+  const status = document.getElementById('f-status');
+  if (status.value === oc.type) return;
+  status.value = oc.type;
+  markFormDirty();
+  showToast(`Status set to ${oc.type} by ${oc.desc}`);
+}
+
+function appendStory(text) {
+  const ta = document.getElementById('f-story');
+  const existing = ta.value.trim();
+  ta.value = existing ? existing + '\n' + text : text;
+}
+
+function hideOpcodeDropdowns() {
+  document.getElementById('opcodeDropdown').style.display     = 'none';
+  document.getElementById('opcodeCodeDropdown').style.display = 'none';
+}
+
+// Dropdown entries are an OP-code or a variant. Built node by node: codes,
+// descriptions and variant names all come from the user's own database.
+function renderChoices(ddEl, matches, onPick) {
+  ddEl._matches = matches;
+  ddEl._onPick  = onPick;
+  ddEl._active  = -1;
+  ddEl.innerHTML = '';
+  matches.forEach((m, i) => {
+    const item = document.createElement('div');
+    item.className = 'opcode-item' + (m.kind === 'variant' ? ' is-variant' : '');
+    item.dataset.idx = i;
+    const code = document.createElement('span');
+    code.className = 'oc';
+    code.textContent = m.code || '';
+    const label = document.createElement('span');
+    label.className = 'od';
+    label.textContent = m.label;
+    item.append(code, label);
+    if (m.tag) {
+      const tag = document.createElement('span');
+      tag.className = 'otag';
+      tag.textContent = m.tag;
+      item.append(tag);
     }
-  }
-
-  descInput.addEventListener('input', () => {
-    const q = descInput.value.toLowerCase().trim();
-    if (!q) { dropdown.style.display = 'none'; return; }
-    const matches = opcodes.filter(o =>
-      o.desc.toLowerCase().includes(q) || o.code.toLowerCase().includes(q)
-    ).slice(0, 10);
-    if (!matches.length) { dropdown.style.display = 'none'; return; }
-    buildDropdown(descInput, dropdown, matches, activeIdx, (v) => activeIdx = v);
+    item.addEventListener('mousedown', e => { e.preventDefault(); onPick(m); });
+    ddEl.append(item);
   });
+  ddEl.style.display = matches.length ? 'block' : 'none';
+}
 
-  descInput.addEventListener('keydown', (e) => {
-    const matches = descInput._matches || [];
-    handleKeys(e, dropdown, matches, () => activeIdx, (v) => activeIdx = v);
-  });
+function handleChoiceKeys(e, ddEl) {
+  if (ddEl.style.display === 'none' || !ddEl._matches || !ddEl._matches.length) return;
+  const items = ddEl.querySelectorAll('.opcode-item');
+  const move = i => {
+    ddEl._active = i;
+    items.forEach((el, j) => el.classList.toggle('active', j === i));
+  };
+  if (e.key === 'ArrowDown') { e.preventDefault(); move(Math.min(ddEl._active + 1, ddEl._matches.length - 1)); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); move(Math.max(ddEl._active - 1, 0)); }
+  else if (e.key === 'Enter' && ddEl._active >= 0) { e.preventDefault(); ddEl._onPick(ddEl._matches[ddEl._active]); }
+  else if (e.key === 'Escape') { ddEl.style.display = 'none'; ddEl._active = -1; }
+}
 
-  opcodeInput.addEventListener('input', () => {
-    const q = opcodeInput.value.toLowerCase().trim();
-    const exact = opcodes.find(o => o.code.toLowerCase() === q);
-    if (exact) {
-      descInput.value = exact.desc;
-      autofillStoryFromOpcode(exact.code);
-    }
-    if (!q) { opcodeCodeDropdown.style.display = 'none'; return; }
-    const matches = opcodes.filter(o =>
-      o.code.toLowerCase().includes(q) || o.desc.toLowerCase().includes(q)
-    ).slice(0, 10);
-    if (!matches.length) { opcodeCodeDropdown.style.display = 'none'; return; }
-    buildDropdown(opcodeInput, opcodeCodeDropdown, matches, activeIdx2, (v) => activeIdx2 = v);
-  });
+const asVariantChoice = t => {
+  const oc = opcodeOfVariant(t);
+  return { kind: 'variant', code: oc ? oc.code : '', label: t.key, tag: 'story', ref: t };
+};
+const asOpcodeChoice = o => ({ kind: 'opcode', code: o.code, label: o.desc, tag: o.type || '', ref: o });
 
-  opcodeInput.addEventListener('keydown', (e) => {
-    const matches = opcodeInput._matches || [];
-    handleKeys(e, opcodeCodeDropdown, matches, () => activeIdx2, (v) => activeIdx2 = v);
-  });
+function descriptionChoices(q) {
+  const variants = templates
+    .filter(t => t.key && t.key.toLowerCase().includes(q) && opcodeOfVariant(t))
+    .map(asVariantChoice);
+  const codes = opcodes
+    .filter(o => o.desc.toLowerCase().includes(q) || o.code.toLowerCase().includes(q))
+    .map(asOpcodeChoice);
+  return variants.concat(codes).slice(0, 12);
+}
 
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.opcode-wrap')) {
-      dropdown.style.display          = 'none';
-      opcodeCodeDropdown.style.display = 'none';
-    }
-  });
+const pickChoice = m => (m.kind === 'variant' ? selectVariant(m.ref) : selectOpcode(m.ref.code, m.ref.desc));
+
+// Several variants under one code: offer them instead of guessing.
+function offerVariants(variants) {
+  renderChoices(document.getElementById('opcodeDropdown'), variants.map(asVariantChoice), pickChoice);
+  document.getElementById('f-desc').focus();
 }
 
 function selectOpcode(code, desc) {
   document.getElementById('f-desc').value   = desc;
   document.getElementById('f-opcode').value = code;
-  document.getElementById('opcodeDropdown').style.display          = 'none';
-  document.getElementById('opcodeCodeDropdown').style.display       = 'none';
-  autofillStoryFromOpcode(code);
+  hideOpcodeDropdowns();
+  applyParentType(code);
+  const variants = variantsOf(code);
+  if (variants.length === 1) appendStory(variants[0].value);
+  else if (variants.length > 1) offerVariants(variants);
+  markFormDirty();
+  refreshCopyFromForm();
+}
+
+function selectVariant(t) {
+  const oc = opcodeOfVariant(t);
+  document.getElementById('f-desc').value = t.key;
+  if (oc) document.getElementById('f-opcode').value = oc.code;
+  hideOpcodeDropdowns();
+  if (oc) applyParentType(oc.code);
+  appendStory(t.value);
+  markFormDirty();
+  refreshCopyFromForm();
+}
+
+function initOpcodeAutocomplete() {
+  const descInput    = document.getElementById('f-desc');
+  const opcodeInput  = document.getElementById('f-opcode');
+  const dropdown     = document.getElementById('opcodeDropdown');
+  const codeDropdown = document.getElementById('opcodeCodeDropdown');
+
+  descInput.addEventListener('input', () => {
+    const q = descInput.value.toLowerCase().trim();
+    if (!q) { dropdown.style.display = 'none'; return; }
+    renderChoices(dropdown, descriptionChoices(q), pickChoice);
+  });
+  descInput.addEventListener('keydown', e => handleChoiceKeys(e, dropdown));
+
+  opcodeInput.addEventListener('input', () => {
+    const q = opcodeInput.value.toLowerCase().trim();
+    const exact = opcodes.find(o => o.code.toLowerCase() === q);
+    if (exact) {
+      // Typed out in full: fill in what follows from it, but never move the
+      // cursor -- the code being typed may be a longer one that starts the same.
+      descInput.value = exact.desc;
+      applyParentType(exact.code);
+      const variants = variantsOf(exact.code);
+      if (variants.length === 1) appendStory(variants[0].value);
+      refreshCopyFromForm();
+    }
+    if (!q) { codeDropdown.style.display = 'none'; return; }
+    const matches = opcodes
+      .filter(o => o.code.toLowerCase().includes(q) || o.desc.toLowerCase().includes(q))
+      .slice(0, 10).map(asOpcodeChoice);
+    renderChoices(codeDropdown, matches, m => selectOpcode(m.ref.code, m.ref.desc));
+  });
+  opcodeInput.addEventListener('keydown', e => handleChoiceKeys(e, codeDropdown));
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.opcode-wrap')) hideOpcodeDropdowns();
+  });
 }
 
 // ── RO + Line combo auto-fill ─────────────────────────────────────────────────
@@ -1328,8 +1410,8 @@ function renderRef(query) {
   container.innerHTML = '';
   const q = query.toLowerCase().trim();
 
-  if (!refNotes.length) {
-    container.innerHTML = '<div style="color:var(--muted);font-size:12px;font-family:var(--mono);padding:12px 0">No ref notes found in Ref_Notes sheet.</div>';
+  if (!refNotes.length && !opcodes.length) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px;font-family:var(--mono);padding:12px 0">No reference notes or OP-codes yet.</div>';
     return;
   }
 
@@ -1362,6 +1444,40 @@ function renderRef(query) {
     });
     container.appendChild(catEl);
   }
+
+  // OP-codes, editable the same way as notes: right-click to edit or delete.
+  const codes = opcodes.filter(o =>
+    !q || [o.code, o.desc, o.type].join(' ').toLowerCase().includes(q));
+  if (codes.length) {
+    const catEl = document.createElement('div');
+    catEl.className = 'ref-category';
+    const title = document.createElement('div');
+    title.className = 'ref-category-title';
+    title.textContent = 'OP-Codes';
+    catEl.append(title);
+    codes.forEach(o => {
+      const el = document.createElement('div');
+      el.className = 'ref-item';
+      const key = document.createElement('span');
+      key.className = 'ref-key';
+      key.textContent = o.code || '—';
+      el.append(key, document.createTextNode(' — ' + o.desc));
+      if (o.type) {
+        const badge = document.createElement('span');
+        badge.className = 'ref-type';
+        badge.textContent = o.type;
+        el.append(badge);
+      }
+      el.addEventListener('contextmenu', e => showRefContextMenu(e, el, { kind: 'opcode', ...o }));
+      el.addEventListener('click', () => {
+        if (!o.code) return;
+        navigator.clipboard.writeText(o.code);
+        showToast('Copied: ' + o.code);
+      });
+      catEl.append(el);
+    });
+    container.append(catEl);
+  }
 }
 
 function filterRef() {
@@ -1378,7 +1494,7 @@ function showRefContextMenu(e, item, noteObj) {
   const menu = document.createElement('div');
   menu.className = 'ref-context-menu';
   menu.innerHTML = `
-    <div class="ref-context-item" id="ctxEdit">Edit Key</div>
+    <div class="ref-context-item" id="ctxEdit">Edit</div>
     <div class="ref-context-item danger" id="ctxDelete">Delete</div>
   `;
   menu.style.left = e.clientX + 'px';
@@ -1386,13 +1502,14 @@ function showRefContextMenu(e, item, noteObj) {
   document.body.appendChild(menu);
   refContextMenu = menu;
 
+  const isOpcode = noteObj.kind === 'opcode';
   menu.querySelector('#ctxEdit').addEventListener('click', () => {
     closeRefContextMenu();
-    openRefModal(noteObj, item);
+    if (isOpcode) openOpcodeModal(noteObj); else openRefModal(noteObj, item);
   });
   menu.querySelector('#ctxDelete').addEventListener('click', () => {
     closeRefContextMenu();
-    deleteRefNote(noteObj);
+    if (isOpcode) deleteOpcode(noteObj); else deleteRefNote(noteObj);
   });
 
   setTimeout(() => document.addEventListener('click', closeRefContextMenu), 0);
@@ -1443,11 +1560,69 @@ async function saveRefNoteEdit(noteObj) {
 }
 
 function deleteRefNote(noteObj) {
-  // Reuse delete modal pattern
-  document.getElementById('deleteModalLabel').textContent =
-    `${noteObj.category ? noteObj.category + ' — ' : ''}${noteObj.key}`;
-  document.getElementById('deleteConfirmBtn').onclick = () => confirmDeleteRefNote(noteObj);
-  document.getElementById('deleteModal').classList.add('open');
+  askDelete('DELETE NOTE', 'Are you sure you want to delete this note?',
+            `${noteObj.category ? noteObj.category + ' — ' : ''}${noteObj.key}`,
+            () => confirmDeleteRefNote(noteObj));
+}
+
+// ── OP-code editor ────────────────────────────────────────────────────────────
+function openOpcodeModal(oc) {
+  document.getElementById('oc-id').value   = oc.id == null ? '' : oc.id;
+  document.getElementById('oc-code').value = oc.code || '';
+  document.getElementById('oc-desc').value = oc.desc || '';
+  document.getElementById('oc-type').value = oc.type || '';
+  document.getElementById('opcodeModal').classList.add('open');
+  document.getElementById('oc-type').focus();       // the usual reason to open it
+}
+
+function closeOpcodeModal() {
+  document.getElementById('opcodeModal').classList.remove('open');
+}
+
+async function saveOpcode() {
+  const body = {
+    id:   parseInt(document.getElementById('oc-id').value, 10),
+    code: document.getElementById('oc-code').value,
+    desc: document.getElementById('oc-desc').value,
+    type: document.getElementById('oc-type').value,
+  };
+  let res;
+  try {
+    res = await fetch('/api/opcodes', {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+  } catch (e) {
+    showToast('OP-code not saved — server unreachable', true);
+    return;
+  }
+  const data = await jsonOrNull(res);
+  if (!res.ok) {
+    showToast((data && data.error) || `OP-code not saved (${res.status})`, true);
+    return;
+  }
+  closeOpcodeModal();
+  await loadOpcodes();
+  filterRef();
+  showToast('OP-code saved');
+}
+
+function deleteOpcode(oc) {
+  askDelete('DELETE OP-CODE',
+            'Delete this OP-code? Punches already saved keep their description.',
+            `${oc.code ? oc.code + ' — ' : ''}${oc.desc}`,
+            () => confirmDeleteOpcode(oc));
+}
+
+async function confirmDeleteOpcode(oc) {
+  closeDeleteModal();
+  const res  = await fetch(`/api/opcodes?id=${encodeURIComponent(oc.id)}`, { method: 'DELETE' });
+  const data = await jsonOrNull(res);
+  if (!res.ok) { showToast((data && data.error) || 'Delete failed', true); return; }
+  await loadOpcodes();
+  filterRef();
+  showToast('OP-code deleted');
 }
 
 async function confirmDeleteRefNote(noteObj) {
@@ -1552,6 +1727,11 @@ async function checkDbStatus() {
     const data = await jsonOrNull(res);
     if (data && data.db_ok === false) {
       showToast('Reference database unavailable: ' + (data.error || 'unknown'), true);
+    }
+    if (data && data.warnings && data.warnings.length && !dbWarningShown) {
+      dbWarningShown = true;
+      data.warnings.forEach(w => console.warn('DayPunch database:', w));
+      showToast('Database needs attention: ' + data.warnings[0], true);
     }
   } catch (e) {
     // Status polling stays quiet on failure

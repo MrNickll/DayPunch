@@ -1057,3 +1057,22 @@ kbd {
   border-radius: 4px;
   opacity:       0.65;
 }
+
+/* ── OP-codes and variants ───────────────────────────────────────────────── */
+.opcode-item .otag,
+.ref-type {
+  margin-left:    auto;
+  font-family:    var(--mono);
+  font-size:      9px;
+  font-weight:    600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding:        1px 6px;
+  border-radius:  4px;
+  color:          var(--accent);
+  background:     var(--tint-accent);
+  flex-shrink:    0;
+}
+.ref-type { margin-left: 8px; }
+.opcode-item.is-variant .otag { color: var(--neutral-fg); background: var(--tint-neutral); }
+
