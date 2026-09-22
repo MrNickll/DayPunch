@@ -81,19 +81,6 @@
       <!-- Entry panel -->
       <div class="sidebar-panel active" id="panel-form">
 
-        <!-- Resume banner -->
-        <div class="resume-banner" id="resumeBanner" style="display:none">
-          <div class="resume-banner-text">
-            <span class="resume-icon">↩</span>
-            <span>RO <span class="resume-ro-picker" id="resumeRoNumber">—</span></span>
-            <span id="resumeBannerDetail" style="margin-left:8px"></span>
-          </div>
-          <div class="resume-banner-actions">
-            <button class="btn-resume-yes" onclick="confirmResume()">Resume</button>
-            <button class="btn-resume-no"  onclick="declineResume()">Fresh</button>
-          </div>
-        </div>
-
         <div class="punch-form" id="punchForm">
          <div class="form-col-main">
           <div class="form-row">
@@ -364,6 +351,24 @@
     </div>
   </div>
 </div>
+<!-- Resume prompt: owns the page while it is up (the app behind is inert) -->
+<div class="modal-overlay" id="resumeModal">
+  <div class="modal modal-resume" role="alertdialog" aria-labelledby="resumeQuestion"
+       aria-describedby="resumeHint">
+    <div class="resume-row">
+      <div class="resume-question" id="resumeQuestion">
+        Resume <span class="resume-ro-picker" id="resumeRoNumber"
+                     title="Scroll to pick another job">—</span>?
+      </div>
+      <div class="resume-actions">
+        <button class="btn-primary"   id="resumeYes" onclick="confirmResume()">Yes<kbd>Y</kbd></button>
+        <button class="btn-secondary" id="resumeNo"  onclick="declineResume()">No<kbd>N</kbd></button>
+      </div>
+    </div>
+    <div class="settings-hint" id="resumeHint">Scroll over the job number to pick another one.</div>
+  </div>
+</div>
+
 <script src="app.js?v=2"></script>
 </body>
 </html>

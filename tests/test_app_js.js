@@ -49,14 +49,16 @@ function main(src) {
       removeEventListener(t, f) { bag.remove(t, f); },
       querySelectorAll() { return []; }, querySelector() { return null; },
       appendChild() {}, remove() {}, contains() { return false; },
+      focus() { document.activeElement = this; },
     };
   }
 
   var docBag = listenerBag();
   var document = {
-    _els: {}, body: { appendChild() {} },
+    _els: {}, activeElement: null, body: { appendChild() {} },
     getElementById(id) { return this._els[id] || (this._els[id] = el(id)); },
-    querySelectorAll() { return []; }, querySelector() { return null; },
+    querySelectorAll() { return []; },
+    querySelector(sel) { return this._els['sel:' + sel] || (this._els['sel:' + sel] = el(sel)); },
     createElement() { return el('tmp'); },
     addEventListener(t, f) { docBag.add(t, f); },
     removeEventListener(t, f) { docBag.remove(t, f); },
@@ -94,6 +96,7 @@ function main(src) {
       refreshDecision, markFormDirty, clearFormDirty, wireFormListeners,
       setFormValues, clearForm, offerResume, launchPunch, handleGlobalKeydown, reloadApp,
       checkResumeFromPunches, declineResume, startNewPunch, abandonNewPunch,
+      confirmResume, resumePromptOpen,
       togglePunchLauncher, closePunchLauncher,
     };`
   )(document, window, navigator, console, fetch, setInterval, clearInterval, setTimeout, toasts,
@@ -191,6 +194,7 @@ function main(src) {
   api.resumeSnapshot = { status: 'W', ro: '295204' };
   api.resumeRoList = [{ ro: '295204' }, { ro: '298500' }];
   for (var i = 0; i < 5; i++) api.offerResume('W');
+  api.confirmResume();                  // close the prompt the loop opened
   check('  ...still once after five resumes', roSpan._bag.count('wheel'), 1);
   check('  ...and no stacked hover handlers', roSpan._bag.count('mouseenter'), 1);
 
@@ -228,6 +232,7 @@ function main(src) {
   api.offerResume('W');
   check('editingRow is cleared, so saving appends instead of overwriting',
         api.editingRow, null);
+  api.confirmResume();
 
   // Ctrl+S has to work with focus anywhere in the entry tab, so it lives on
   // document rather than on the story textarea (where Ctrl+Enter still sits).
@@ -322,6 +327,54 @@ function main(src) {
   check('a new punch without a resume offer keeps its type too', fields['f-status'], 'DW');
   check('  ...and is marked in progress', api.activePunchIdx(), null);
   api.abandonNewPunch();
+
+  // "Resume?" is a prompt that owns the page: the app behind is inert, and only
+  // while it is open does the keyboard mean Y / N.
+  out.push('\nResume prompt');
+  function prompt(status) {
+    api.punches = [{ row: 2, date: '2026-09-21', time: '08:00', status: 'W', ro: '1042', odometer: '18400' }];
+    api.newPunchInProgress = true;
+    api.checkResumeFromPunches();
+    api.offerResume(status);
+  }
+  var app = document.querySelector('.app');
+  prompt('WI');
+  check('the resume offer opens as a prompt', api.resumePromptOpen(), true);
+  check('  ...with the rest of the app inert', app.inert, true);
+  check('  ...and Yes focused', document.activeElement && document.activeElement.id, 'resumeYes');
+  var stray = key({ key: 'x' });
+  check('a stray key never reaches the page behind', stray.prevented, true);
+  check('  ...nor answers the prompt', api.resumePromptOpen(), true);
+  key({ key: 'y' });
+  check('Y resumes and gives the page back', [api.resumePromptOpen(), app.inert], [false, false]);
+  check('  ...landing straight in Description', document.activeElement.id, 'f-desc');
+
+  prompt('WI');
+  key({ key: 'n' });
+  check('N starts fresh, keeping the picked type', [api.resumePromptOpen(), fields['f-status']], [false, 'WI']);
+  api.abandonNewPunch();
+
+  prompt('W');
+  key({ key: 'Enter' });
+  check('Enter means Yes by default (the job stays prefilled)', fields['f-ro'], '1042');
+
+  prompt('W');
+  document.getElementById('resumeNo').focus();
+  key({ key: 'Enter' });
+  check('Enter on a focused No means No', fields['f-ro'], '');
+  api.abandonNewPunch();
+
+  prompt('W');
+  key({ key: 'Escape' });
+  check('Escape means No', [api.resumePromptOpen(), fields['f-ro']], [false, '']);
+  api.abandonNewPunch();
+
+  prompt('W');
+  fetchCalls.length = 0;
+  key({ ctrlKey: true, key: 's' });
+  check('Ctrl+S cannot save the half-filled punch behind the prompt',
+        fetchCalls.some(function (c) { return c.url === '/api/punches'; }), false);
+  api.confirmResume();
 
   out.push('\n' + passed + ' passed, ' + failed + ' failed\n');
   return { text: out.join('\n'), failed: failed };

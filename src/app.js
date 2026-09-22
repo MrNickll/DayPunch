@@ -51,6 +51,21 @@ function wireGlobalShortcuts() {
 }
 
 function handleGlobalKeydown(e) {
+  // "Resume?" owns the keyboard while it is up. Enter answers with whichever
+  // button has focus -- Yes unless the user has tabbed to No.
+  if (resumePromptOpen()) {
+    const k = e.key;
+    if (k === 'y' || k === 'Y') { e.preventDefault(); confirmResume(); }
+    else if (k === 'n' || k === 'N' || k === 'Escape') { e.preventDefault(); declineResume(); }
+    else if (k === 'Enter') {
+      e.preventDefault();
+      if (document.activeElement && document.activeElement.id === 'resumeNo') declineResume();
+      else confirmResume();
+    }
+    else if (!document.getElementById('resumeModal').contains(e.target)) e.preventDefault();
+    return;
+  }
+
   // Ctrl+S saves the punch from anywhere, whatever holds focus. The whole point
   // is not having to tab out of the story box after a description has pulled in
   // an OP-code and a prebuilt story. The Ref note modal is the one thing that
@@ -1233,16 +1248,31 @@ function offerResume(status) {
   document.getElementById('f-warranty').checked = false;
   document.getElementById('f-story').value = '';
 
-  const banner = document.getElementById('resumeBanner');
-  const roSpan = document.getElementById('resumeRoNumber');
-  roSpan.textContent = selected.ro;
-
-  document.getElementById('resumeBannerDetail').textContent = 'Resume?';
-  banner.style.display = 'flex';
+  document.getElementById('resumeRoNumber').textContent = selected.ro;
 
   switchTab('form');
   markFormDirty();   // a prefilled resume is unsaved work
+  openResumePrompt();
   return true;
+}
+
+// ── Resume prompt ─────────────────────────────────────────────────────────────
+// While "Resume?" is up the rest of the app is inert -- no clicks, no focus --
+// and only then does the keyboard mean Y / N. A permanent Y/N listener would
+// have eaten those letters out of every note typed afterwards.
+function resumePromptOpen() {
+  return document.getElementById('resumeModal').classList.contains('open');
+}
+
+function openResumePrompt() {
+  document.getElementById('resumeModal').classList.add('open');
+  document.querySelector('.app').inert = true;
+  document.getElementById('resumeYes').focus();
+}
+
+function closeResumePrompt() {
+  document.getElementById('resumeModal').classList.remove('open');
+  document.querySelector('.app').inert = false;    // before focusing anything in it
 }
 
 // Wired ONCE from wireFormListeners(). It used to be called from offerResume(),
@@ -1274,12 +1304,13 @@ function initResumeRoPicker() {
 function confirmResume() {
   resumeSnapshot = null;
   editingRow     = null;
-  document.getElementById('resumeBanner').style.display = 'none';
+  closeResumePrompt();
+  document.getElementById('f-desc').focus();
 }
 
 function declineResume() {
   resumeSnapshot = null;
-  document.getElementById('resumeBanner').style.display = 'none';
+  closeResumePrompt();
   startNewPunch(resumeStatus || 'W');
 }
 
