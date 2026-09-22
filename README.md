@@ -11,7 +11,8 @@ op-codes, notes and reusable text snippets.
 
 - A local web page served by a small Python process, displayed in a desktop
   window.
-- The process listens on the loopback interface (`127.0.0.1`) only. It is not
+- The process listens on the loopback interface (`127.0.0.1`) only, on port
+  5000 or, if that is taken, a free port chosen by the system. It is not
   reachable from another machine, and it makes no outbound connections.
 
 ## What it touches

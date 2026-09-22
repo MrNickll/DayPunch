@@ -249,6 +249,37 @@ for f in bundled:
 check("  ...with the Open Font License beside them",
       os.path.exists(os.path.join(fonts_dir, "OFL.txt")), True)
 
+# The launcher used to call app.run() on a fixed port inside a thread: if the
+# port was taken it failed silently, and the window opened onto nothing -- or
+# onto whatever else was listening there. bind_server() binds or falls back.
+print("\nPort selection")
+import socket, threading, urllib.request
+
+def free_port():
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+wanted = free_port()
+srv = server.bind_server(wanted)
+check("a free preferred port is used as asked", srv.port, wanted)
+srv.server_close()
+
+squatter = socket.socket()
+squatter.bind(("127.0.0.1", 0))
+squatter.listen(1)
+taken = squatter.getsockname()[1]
+srv = server.bind_server(taken)
+check("a taken port falls back to another one", srv.port != taken and srv.port > 0, True)
+check("  ...and binds loopback only", srv.server_address[0], "127.0.0.1")
+worker = threading.Thread(target=srv.serve_forever, daemon=True)
+worker.start()
+with urllib.request.urlopen(f"http://127.0.0.1:{srv.port}/api/settings", timeout=5) as resp:
+    check("  ...and actually serves the app there", (resp.status, "app_name" in resp.read().decode()), (200, True))
+srv.shutdown()
+srv.server_close()
+squatter.close()
+
 shutil.rmtree(WORK, ignore_errors=True)
 print(f"\n{passed} passed, {failed} failed\n")
 sys.exit(1 if failed else 0)

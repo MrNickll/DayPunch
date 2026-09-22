@@ -79,6 +79,8 @@ SETTINGS = _load_settings()
 LABELS = SETTINGS["labels"]
 ORG_NAME = os.environ.get("DAYPUNCH_ORG", SETTINGS["org_name"])
 
+# The port to try first. If something already holds it, server.bind_server()
+# lets the system choose a free one rather than failing.
 PORT = int(os.environ.get("DAYPUNCH_PORT", "5000"))
 
 # ── Daily punch workbooks ─────────────────────────────────────────────────────

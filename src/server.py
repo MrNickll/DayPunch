@@ -8,12 +8,14 @@ from contextlib import closing
 import glob
 import logging
 import os
+import socket
 import sqlite3
 import config
 from config import (
     FOLDER, PUNCH_ROWS, DATA_COLS, MAX_PUNCHES, PUNCH_SHEET, DB_PATH,
 )
 from calendar_sync import write_calendar_event, cleanup_old_calendar_files
+from werkzeug.serving import make_server
 
 app = Flask(__name__, static_folder=None)
 log = logging.getLogger("daypunch")
@@ -138,6 +140,47 @@ def get_db():
 
 config.write_default_settings()
 init_db()
+
+
+# ── Serving ───────────────────────────────────────────────────────────────────
+
+def _bind_loopback(port):
+    """A listening IPv4 loopback socket on `port` (0 means any free port).
+
+    Deliberately without SO_REUSEADDR: on Windows that option lets a socket
+    bind a port another program is actively using, which is the silent
+    takeover this exists to prevent.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("127.0.0.1", port))
+        sock.listen(128)
+    except OSError:
+        sock.close()
+        raise
+    return sock
+
+
+def bind_server(preferred):
+    """Serve the app on the preferred loopback port, or on any free one if that
+    is taken.
+
+    The bind is the check: asking "is it free?" and binding afterwards leaves a
+    gap in which something else can take the port. The socket is bound here and
+    handed to Werkzeug rather than letting make_server() bind it, because on a
+    busy port make_server() prints a message and calls sys.exit(1) -- nothing a
+    caller can catch and recover from. The socket is listening by the time this
+    returns, so a client can connect before serve_forever() is running.
+    """
+    try:
+        sock = _bind_loopback(preferred)
+    except OSError:
+        log.warning("port %d is in use; letting the system choose one", preferred)
+        sock = _bind_loopback(0)
+    port = sock.getsockname()[1]
+    srv = make_server("127.0.0.1", port, app, threaded=True, fd=sock.fileno())
+    sock.close()              # make_server() works on its own duplicate
+    return srv
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

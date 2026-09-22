@@ -27,6 +27,8 @@ exec "$VENV/bin/python" -c "
 import logging, config, daily_file, server
 logging.basicConfig(level=logging.INFO)
 daily_file.create_daily_file()
+srv = server.bind_server(config.PORT)
 print('DayPunch', config.VERSION, '| data:', config.FOLDER, '| db:', config.DB_PATH)
-server.app.run(port=config.PORT, debug=False, use_reloader=False)
+print(' * Running on http://127.0.0.1:%d' % srv.port, flush=True)
+srv.serve_forever()
 "
