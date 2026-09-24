@@ -354,6 +354,28 @@
     </div>
   </div>
 </div>
+<!-- Category group -->
+<div class="modal-overlay" id="groupModal" onclick="if(event.target===this)closeGroupModal()">
+  <div class="modal" role="dialog" aria-labelledby="groupModalTitle">
+    <div class="modal-title" id="groupModalTitle">CATEGORY GROUP</div>
+    <div class="settings-hint" id="groupModalFor" style="margin-bottom:10px"></div>
+    <input type="hidden" id="grp-category" />
+    <div class="form-group" style="margin-bottom:6px">
+      <div class="form-label">Group</div>
+      <input class="form-input" id="grp-name" list="refGroupList" maxlength="40"
+             placeholder="e.g. Car info — leave blank for none" />
+      <datalist id="refGroupList"></datalist>
+    </div>
+    <div class="settings-hint" style="margin-bottom:14px">
+      Applies to every note in this category. Pick an existing group or type a new one.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary" style="flex:1" onclick="closeGroupModal()">Cancel</button>
+      <button class="btn-primary"   style="flex:1" onclick="saveGroup()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- OP-code editor -->
 <div class="modal-overlay" id="opcodeModal" onclick="if(event.target===this)closeOpcodeModal()">
   <div class="modal" role="dialog" aria-labelledby="opcodeModalTitle">

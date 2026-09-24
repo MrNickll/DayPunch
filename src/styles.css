@@ -1113,4 +1113,17 @@ kbd {
   font-family: var(--mono);
   padding:     12px 0;
 }
+.ref-section + .ref-section { margin-top: 14px; }
+.ref-group-title {
+  font-family:    var(--sans);
+  font-size:      12px;
+  font-weight:    600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color:          var(--accent);
+  padding:        6px 0 4px;
+  border-bottom:  1px solid var(--border);
+  margin-bottom:  6px;
+}
+.ref-category-title { cursor: context-menu; }
 

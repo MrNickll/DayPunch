@@ -73,6 +73,13 @@ function handleGlobalKeydown(e) {
   // takes the shortcut over while it is open.
   const settingsOpen = document.getElementById('settingsModal').classList.contains('open');
   const opcodeOpen   = document.getElementById('opcodeModal').classList.contains('open');
+  const groupOpen    = document.getElementById('groupModal').classList.contains('open');
+
+  if (groupOpen && (e.key === 'Escape' || e.key === 'Enter')) {
+    e.preventDefault();
+    if (e.key === 'Escape') closeGroupModal(); else saveGroup();
+    return;
+  }
 
   if (e.key === 'Escape' && settingsOpen) {
     closeSettings();
@@ -87,6 +94,7 @@ function handleGlobalKeydown(e) {
     e.preventDefault();   // also stops WebView2's own "save page" dialog
     // An open dialog owns the shortcut; otherwise it saves the punch.
     if (settingsOpen) saveSettings();
+    else if (groupOpen) saveGroup();
     else if (opcodeOpen) saveOpcode();
     else if (document.getElementById('refModal').classList.contains('open')) saveRefNote();
     else savePunch();
@@ -171,8 +179,9 @@ async function loadTemplates() {
 async function loadRefNotes() {
   const res = await fetch('/api/refnotes');
   refNotes  = await res.json();
+  await loadRefGroups();
   populateRefCatList();
-  renderRef('');
+  filterRef();
 }
 
 // ── Save ──────────────────────────────────────────────────────────────────────
@@ -1401,51 +1410,101 @@ function declineResume() {
 
 // ── Reference panel ───────────────────────────────────────────────────────────
 function populateRefCatList() {
-  const cats = [...new Set(refNotes.map(n => n.category).filter(Boolean))];
-  document.getElementById('refCatList').innerHTML = cats.map(c => `<option value="${c}">`).join('');
+  const list = document.getElementById('refCatList');
+  list.innerHTML = '';
+  [...new Set(refNotes.map(n => n.category).filter(Boolean))].forEach(c => {
+    const o = document.createElement('option');   // category names are user data
+    o.value = c;
+    list.append(o);
+  });
 }
 
-// REF holds three kinds of thing at once -- notes by category, story templates
-// and OP-codes -- and stacking them into one list made it unreadable. A strip of
-// chips filters to one group. Chips rather than fixed tabs: a working shop ends
-// up with twenty-odd categories, most holding one or two notes, and that many
-// tabs would be worse than the list they replace.
-let refGroup = 'All';
+// REF holds notes by category, story templates and OP-codes. A strip of chips
+// filters it by GROUP -- a handful of user-named buckets ("Car info", "People")
+// that the note categories fold into -- and inside a group the categories show
+// as sub-headings. The group belongs to the category, not to each note, so
+// re-grouping never means re-categorising. Chips rather than fixed tabs because
+// nothing limits how many groups there are.
+const UNGROUPED = 'Ungrouped';
+const STORIES   = 'Stories';
+const OPCODES   = 'OP-Codes';
+const FIXED_CHIPS = [UNGROUPED, STORIES, OPCODES];
 
-function refGroups() {
-  const groups = new Map();
+let refGroup = 'All';                  // the chip being shown
+let refCategoryGroups = {};            // lower-cased category -> group name
+let newNoteGroup = '';                 // group a note added from inside a chip goes to
+
+const categoryOf = n => (n.category || '').trim() || 'General';
+const groupOf = category => refCategoryGroups[(category || '').trim().toLowerCase()] || '';
+
+async function loadRefGroups() {
+  try {
+    const data = await jsonOrNull(await fetch('/api/refgroups'));
+    refCategoryGroups = {};
+    Object.entries(data || {}).forEach(([cat, grp]) => {
+      refCategoryGroups[cat.trim().toLowerCase()] = grp;
+    });
+  } catch (e) {
+    refCategoryGroups = {};
+  }
+}
+
+function existingGroups() {
+  return [...new Set(Object.values(refCategoryGroups))].sort((a, b) => a.localeCompare(b));
+}
+
+// chip -> Map(category -> items). Groups A to Z, then the fixed chips, so the
+// strip keeps its order as notes are added.
+function refChips() {
+  const chips = new Map();
+  const put = (chip, category, item) => {
+    if (!chips.has(chip)) chips.set(chip, new Map());
+    const cats = chips.get(chip);
+    if (!cats.has(category)) cats.set(category, []);
+    cats.get(category).push(item);
+  };
   refNotes.forEach(n => {
-    const name = (n.category || '').trim() || 'General';
-    if (!groups.has(name)) groups.set(name, []);
-    groups.get(name).push(n);
+    const category = categoryOf(n);
+    if (n.sheet === 'Story_Templates') put(STORIES, category, n);
+    else put(groupOf(category) || UNGROUPED, category, n);
   });
-  // Categories A-Z, then the other two kinds, so the strip keeps the same order
-  // as notes are added and muscle memory survives.
+  opcodes.forEach(o => put(OPCODES, OPCODES, o));
+
+  const byName = m => new Map([...m.entries()].sort((a, b) => a[0].localeCompare(b[0])));
   const ordered = new Map();
-  [...groups.keys()]
-    .filter(n => n.toLowerCase() !== 'story')
+  [...chips.keys()]
+    .filter(k => !FIXED_CHIPS.includes(k))
     .sort((a, b) => a.localeCompare(b))
-    .forEach(n => ordered.set(n, groups.get(n)));
-  const story = [...groups.keys()].find(n => n.toLowerCase() === 'story');
-  if (story) ordered.set(story, groups.get(story));
-  if (opcodes.length) ordered.set('OP-Codes', opcodes);
+    .forEach(k => ordered.set(k, byName(chips.get(k))));
+  FIXED_CHIPS.forEach(k => { if (chips.has(k)) ordered.set(k, byName(chips.get(k))); });
   return ordered;
 }
 
-function refMatches(group, item, q) {
+function refMatches(chip, item, q) {
   if (!q) return true;
-  const fields = group === 'OP-Codes'
+  const fields = chip === OPCODES
     ? [item.code, item.desc, item.type]
     : [item.category, item.key, item.value, item.tags];
   return fields.join(' ').toLowerCase().includes(q);
 }
 
-// A search always looks everywhere, so a chip is never left contradicting it:
-// typing switches the strip back to All.
-function visibleRefGroups(q) {
-  const groups = refGroups();
-  const names = (q || refGroup === 'All') ? [...groups.keys()] : [refGroup];
-  return names.filter(name => (groups.get(name) || []).some(it => refMatches(name, it, q)));
+// What is on screen: [chip, Map(category -> matching items)] pairs. A search
+// always looks everywhere, so a chip is never left contradicting it.
+function visibleRef(q) {
+  const chips = refChips();
+  const names = (q || refGroup === 'All') ? [...chips.keys()] : [refGroup];
+  const out = [];
+  names.forEach(chip => {
+    const cats = chips.get(chip);
+    if (!cats) return;
+    const kept = new Map();
+    cats.forEach((items, cat) => {
+      const hits = items.filter(it => refMatches(chip, it, q));
+      if (hits.length) kept.set(cat, hits);
+    });
+    if (kept.size) out.push([chip, kept]);
+  });
+  return out;
 }
 
 function setRefGroup(name) {
@@ -1494,23 +1553,34 @@ function refOpcodeEl(oc) {
   return el;
 }
 
-function renderRefTabs(groups, q) {
+// A category heading is where its group is chosen: right-click it.
+function refCategoryHeading(category, count) {
+  const h = document.createElement('div');
+  h.className = 'ref-category-title';
+  h.textContent = category;
+  h.title = 'Right-click to choose this category\'s group';
+  h.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    openGroupModal(category, count);
+  });
+  return h;
+}
+
+function renderRefTabs(chips, q) {
   const strip = document.getElementById('refTabs');
   strip.innerHTML = '';
   const counts = new Map();
   let total = 0;
-  groups.forEach((items, name) => {
-    const n = items.filter(it => refMatches(name, it, q)).length;
-    counts.set(name, n);
+  chips.forEach((cats, chip) => {
+    let n = 0;
+    cats.forEach(items => { n += items.filter(it => refMatches(chip, it, q)).length; });
+    counts.set(chip, n);
     total += n;
   });
-
-  const chip = (name, count) => {
+  const chipEl = (name, count) => {
     const b = document.createElement('button');
-    b.className = 'ref-tab'
-      + (refGroup === name ? ' active' : '')
-      + (count ? '' : ' empty');
     b.type = 'button';
+    b.className = 'ref-tab' + (refGroup === name ? ' active' : '') + (count ? '' : ' empty');
     const label = document.createElement('span');
     label.textContent = name;
     const badge = document.createElement('span');
@@ -1520,54 +1590,102 @@ function renderRefTabs(groups, q) {
     b.addEventListener('click', () => setRefGroup(name));
     return b;
   };
-
-  strip.append(chip('All', total));
-  groups.forEach((items, name) => strip.append(chip(name, counts.get(name))));
+  strip.append(chipEl('All', total));
+  chips.forEach((cats, chip) => strip.append(chipEl(chip, counts.get(chip))));
 }
 
 function renderRef(query) {
   const container = document.getElementById('refContent');
   const q = (query || '').toLowerCase().trim();
-  const groups = refGroups();
+  const chips = refChips();
 
-  // A group can disappear when its last note goes.
-  if (refGroup !== 'All' && !groups.has(refGroup)) refGroup = 'All';
+  if (refGroup !== 'All' && !chips.has(refGroup)) refGroup = 'All';   // its last note went
   if (q) refGroup = 'All';
 
-  renderRefTabs(groups, q);
+  renderRefTabs(chips, q);
   container.innerHTML = '';
 
   if (!refNotes.length && !opcodes.length) {
     container.innerHTML = '<div class="ref-empty">No reference notes or OP-codes yet.</div>';
     return;
   }
-
-  const names = visibleRefGroups(q);
-  if (!names.length) {
+  const shown = visibleRef(q);
+  if (!shown.length) {
     container.innerHTML = '<div class="ref-empty">Nothing matches.</div>';
     return;
   }
 
-  // The heading only earns its place when more than one group is on screen;
-  // with a single group the chip above already says which.
-  const withHeadings = names.length > 1;
-  names.forEach(name => {
-    const items = groups.get(name).filter(it => refMatches(name, it, q));
-    const catEl = document.createElement('div');
-    catEl.className = 'ref-category';
-    if (withHeadings) {
+  // Group headings only when several groups share the screen; category headings
+  // wherever there are categories to tell apart -- and to right-click.
+  const several = shown.length > 1;
+  shown.forEach(([chip, cats]) => {
+    const section = document.createElement('div');
+    section.className = 'ref-section';
+    if (several) {
       const title = document.createElement('div');
-      title.className = 'ref-category-title';
-      title.textContent = name;
-      catEl.append(title);
+      title.className = 'ref-group-title';
+      title.textContent = chip;
+      section.append(title);
     }
-    items.forEach(it => catEl.append(name === 'OP-Codes' ? refOpcodeEl(it) : refNoteEl(it)));
-    container.append(catEl);
+    cats.forEach((items, cat) => {
+      const catEl = document.createElement('div');
+      catEl.className = 'ref-category';
+      const allInCat = (chips.get(chip).get(cat) || items).length;
+      if (chip !== OPCODES && chip !== STORIES) catEl.append(refCategoryHeading(cat, allInCat));
+      items.forEach(it => catEl.append(chip === OPCODES ? refOpcodeEl(it) : refNoteEl(it)));
+      section.append(catEl);
+    });
+    container.append(section);
   });
 }
 
 function filterRef() {
   renderRef(document.getElementById('refSearch').value);
+}
+
+// ── Category group dialog ─────────────────────────────────────────────────────
+function openGroupModal(category, count) {
+  document.getElementById('grp-category').value = category;
+  document.getElementById('groupModalFor').textContent =
+    `${category} — ${count} note${count === 1 ? '' : 's'}`;
+  const list = document.getElementById('refGroupList');
+  list.innerHTML = '';
+  existingGroups().forEach(g => {
+    const o = document.createElement('option');
+    o.value = g;
+    list.append(o);
+  });
+  const input = document.getElementById('grp-name');
+  input.value = groupOf(category);
+  document.getElementById('groupModal').classList.add('open');
+  input.focus();
+  input.select();
+}
+
+function closeGroupModal() {
+  document.getElementById('groupModal').classList.remove('open');
+}
+
+async function saveGroup() {
+  const category = document.getElementById('grp-category').value;
+  const group    = document.getElementById('grp-name').value.trim();
+  let res;
+  try {
+    res = await fetch('/api/refgroups', {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ category, group }),
+    });
+  } catch (e) {
+    showToast('Group not saved — server unreachable', true);
+    return;
+  }
+  const data = await jsonOrNull(res);
+  if (!res.ok) { showToast((data && data.error) || `Group not saved (${res.status})`, true); return; }
+  closeGroupModal();
+  await loadRefGroups();
+  filterRef();              // stay put: sorting "Ungrouped" one category at a time
+  showToast(`${category} → ${group || UNGROUPED}`);
 }
 
 // ── Ref context menu ──────────────────────────────────────────────────────────
@@ -1614,7 +1732,10 @@ function openRefModal(noteObj, anchorEl) {
   document.getElementById('refModalTitle').textContent = noteObj ? 'EDIT NOTE' : 'ADD NOTE';
   document.getElementById('ref-edit-row').value        = noteObj ? noteObj.row   : '';
   document.getElementById('ref-edit-sheet').value      = noteObj ? (noteObj.sheet || 'Ref_Notes') : '';
-  const preset = (!refGroup || refGroup === 'All' || refGroup === 'OP-Codes') ? '' : refGroup;
+  // Adding from inside a group: a story chip means a story, and a new category
+  // created from a group chip lands in that group.
+  newNoteGroup = (!noteObj && !['All', UNGROUPED, STORIES, OPCODES].includes(refGroup)) ? refGroup : '';
+  const preset = (!noteObj && refGroup === STORIES) ? 'Story' : '';
   document.getElementById('ref-cat').value             = noteObj ? noteObj.category : preset;
   document.getElementById('ref-key').value             = noteObj ? noteObj.key      : '';
   document.getElementById('ref-val').value             = noteObj ? noteObj.value    : '';
@@ -1749,6 +1870,16 @@ async function saveRefNote() {
 
   const data = await jsonOrNull(res);
   if (!res.ok) { showToast((data && data.error) || 'Save failed', true); return; }
+
+  // A brand-new category added from inside a group chip joins that group.
+  if (!editRow && newNoteGroup && category.toLowerCase() !== 'story' && !groupOf(category)) {
+    await fetch('/api/refgroups', {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ category, group: newNoteGroup }),
+    });
+  }
+  newNoteGroup = '';
 
   showToast(editRow ? 'Note updated' : 'Note saved');
   closeRefModal();

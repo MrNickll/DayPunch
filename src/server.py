@@ -70,6 +70,13 @@ CREATE TABLE IF NOT EXISTS Ref_Notes (
     [Value]  TEXT,
     Tags     TEXT
 );
+-- Which filter group a note category belongs to ("Torque Specs" -> "Car info").
+-- Kept per category rather than per note, so re-grouping never means editing
+-- every note, and in the database so it travels with the data.
+CREATE TABLE IF NOT EXISTS Ref_Categories (
+    Category TEXT PRIMARY KEY COLLATE NOCASE,
+    [Group]  TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS Story_Templates (
     ID       INTEGER PRIMARY KEY AUTOINCREMENT,
     [Value]  TEXT,
@@ -643,6 +650,53 @@ def add_opcode():
 
 
 # ── Ref Notes ─────────────────────────────────────────────────────────────────
+
+GROUP_NAME_MAX = 40
+# The filter strip has fixed chips with these names; a group called the same
+# would merge into one of them.
+RESERVED_GROUPS = {"all", "ungrouped", "stories", "op-codes"}
+
+
+@app.route("/api/refgroups", methods=["GET"])
+def get_refgroups():
+    """Category -> group. A category with no row is ungrouped."""
+    try:
+        with closing(get_db()) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT Category, [Group] FROM Ref_Categories WHERE [Group] <> ''")
+            return jsonify({row[0]: row[1] for row in cursor.fetchall()})
+    except Exception:
+        log.exception("get_refgroups failed")
+        return jsonify({})
+
+
+@app.route("/api/refgroups", methods=["PUT"])
+def set_refgroup():
+    """Put a category in a group; an empty group takes it out of any."""
+    if not request.is_json:
+        return jsonify({"error": "Expected application/json."}), 415
+    entry = request.get_json(silent=True) or {}
+    category = (entry.get("category") or "").strip()
+    group = (entry.get("group") or "").strip()
+    if not category:
+        return jsonify({"error": "No category."}), 400
+    if group.lower() in RESERVED_GROUPS:
+        return jsonify({"error": f'"{group}" is already the name of a fixed filter.'}), 400
+    if len(group) > GROUP_NAME_MAX:
+        return jsonify({"error": f"Group names are limited to {GROUP_NAME_MAX} characters."}), 400
+    try:
+        with closing(get_db()) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM Ref_Categories WHERE Category = ?", category)
+            if group:
+                cursor.execute("INSERT INTO Ref_Categories (Category, [Group]) VALUES (?, ?)",
+                               category, group)
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        log.exception("set_refgroup failed")
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/api/refnotes", methods=["GET"])
 def get_refnotes():

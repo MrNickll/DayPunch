@@ -361,6 +361,50 @@ tpl = [t for t in client.get("/api/templates").get_json() if t["key"] == "Winter
 check("story templates carry their name, for use as variants",
       (tpl[0]["key"], tpl[0]["tags"]) if tpl else None, ("Winter tires", "S-T"))
 
+# Note categories fold into a handful of filter groups. The group belongs to the
+# category, so re-grouping never means touching every note.
+print("\nReference groups")
+check("no category starts out grouped", client.get("/api/refgroups").get_json(), {})
+def set_group(category, group):
+    return client.put("/api/refgroups", json={"category": category, "group": group})
+check("a category can be put in a group", set_group("Torque Specs", "Car info").status_code, 200)
+set_group("Brakes", "Car info")
+set_group("Advisors", "People")
+check("  ...and the mapping comes back", client.get("/api/refgroups").get_json(),
+      {"Torque Specs": "Car info", "Brakes": "Car info", "Advisors": "People"})
+set_group("torque specs", "Specs")
+check("category names match whatever their case", client.get("/api/refgroups").get_json().get("Torque Specs"
+      , client.get("/api/refgroups").get_json().get("torque specs")), "Specs")
+set_group("Advisors", "  ")
+check("an empty group takes the category out of any", "Advisors" in client.get("/api/refgroups").get_json(), False)
+check("a missing category is refused", set_group("", "People").status_code, 400)
+check("an over-long group name is refused", set_group("Tools", "x" * 41).status_code, 400)
+check("a group named like a fixed filter is refused", set_group("Tools", "op-codes").status_code, 400)
+check("a non-JSON write is refused",
+      client.put("/api/refgroups", data="c=x", content_type="application/x-www-form-urlencoded").status_code, 415)
+
+# The table is new, so an existing database must simply gain it on start-up.
+old_db2 = os.path.join(WORK, "pre-groups.sqlite3")
+raw = sqlite3.connect(old_db2)
+raw.executescript("""
+CREATE TABLE [OP-Codes] (ID INTEGER PRIMARY KEY AUTOINCREMENT, Code TEXT, Description TEXT, Type TEXT DEFAULT '');
+CREATE TABLE Ref_Notes (ID INTEGER PRIMARY KEY AUTOINCREMENT, Category TEXT, [Key] TEXT, [Value] TEXT, Tags TEXT);
+CREATE TABLE Story_Templates (ID INTEGER PRIMARY KEY AUTOINCREMENT, [Value] TEXT, Category TEXT, [Key] TEXT, Tags TEXT);
+INSERT INTO Ref_Notes (Category, [Key], [Value]) VALUES ('Torque Specs', 'Wheel', '175 Nm');
+""")
+raw.commit(); raw.close()
+real_db = server.DB_PATH
+server.DB_PATH = old_db2
+try:
+    server.init_db()
+    raw = sqlite3.connect(old_db2)
+    tables = {r[0] for r in raw.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    check("an existing database gains the groups table", "Ref_Categories" in tables, True)
+    check("  ...keeping its notes", raw.execute("SELECT COUNT(*) FROM Ref_Notes").fetchone()[0], 1)
+    raw.close()
+finally:
+    server.DB_PATH = real_db
+
 shutil.rmtree(WORK, ignore_errors=True)
 print(f"\n{passed} passed, {failed} failed\n")
 sys.exit(1 if failed else 0)

@@ -92,6 +92,7 @@ function main(src) {
       set resumeRoList(v) { resumeRoList = v; }, get resumeRoList() { return resumeRoList; },
       set opcodes(v) { opcodes = v; }, set templates(v) { templates = v; },
       set refNotes(v) { refNotes = v; }, get refGroup() { return refGroup; },
+      set refCategoryGroups(v) { refCategoryGroups = v; },
       set deferredExternalChange(v) { deferredExternalChange = v; },
       get formDirty() { return formDirty; },
       lastPunchIdx, openPunchIdx, activePunchIdx, isOpenStatus,
@@ -101,7 +102,7 @@ function main(src) {
       checkResumeFromPunches, declineResume, startNewPunch, abandonNewPunch,
       confirmResume, resumePromptOpen,
       selectOpcode, selectVariant, variantsOf, descriptionChoices, deleteRefNote, deleteOpcode,
-      refGroups, visibleRefGroups, setRefGroup, renderRef,
+      refChips, visibleRef, setRefGroup, renderRef,
       togglePunchLauncher, closePunchLauncher,
     };`
   )(document, window, navigator, console, fetch, setInterval, clearInterval, setTimeout, toasts,
@@ -441,34 +442,39 @@ function main(src) {
          document.getElementById('deleteModalLabel').textContent],
         ['DELETE OP-CODE', 'TRN-A — Training Aston']);
 
-  // A real shop ends up with twenty-odd note categories, most holding one or two
-  // notes, so the groups are chips rather than fixed tabs.
+  // Chips are groups -- a handful of buckets the note categories fold into --
+  // and the group belongs to the category, not to each note.
   out.push('\nReference groups');
   api.refNotes = [
-    { row: 1, sheet: 'Ref_Notes',       category: 'Torque Specs', key: 'Rear hub nut', value: '200 Nm', tags: 'torque' },
-    { row: 2, sheet: 'Ref_Notes',       category: 'Torque Specs', key: 'Wheel',        value: '175 Nm', tags: 'torque' },
-    { row: 3, sheet: 'Ref_Notes',       category: 'Advisors',     key: 'Meagan',       value: 'ext 2257', tags: '' },
-    { row: 4, sheet: 'Story_Templates', category: 'Story',        key: 'RTNFF',        value: 'Road tested.', tags: '' },
-    { row: 5, sheet: 'Ref_Notes',       category: '',             key: 'Loose note',   value: 'no category', tags: '' },
+    { row: 1, sheet: 'Ref_Notes',       category: 'Torque Specs', key: 'Rear hub nut', value: '200 Nm',   tags: '' },
+    { row: 2, sheet: 'Ref_Notes',       category: 'Torque Specs', key: 'Wheel',        value: '175 Nm',   tags: '' },
+    { row: 3, sheet: 'Ref_Notes',       category: 'Brakes',       key: 'Front discs',  value: 'min 34',   tags: '' },
+    { row: 4, sheet: 'Ref_Notes',       category: 'Advisors',     key: 'Meagan',       value: 'ext 2257', tags: '' },
+    { row: 5, sheet: 'Ref_Notes',       category: 'Tools',        key: 'Roloc blue',   value: 'fine',     tags: '' },
+    { row: 6, sheet: 'Ref_Notes',       category: '',             key: 'Loose note',   value: 'x',        tags: '' },
+    { row: 7, sheet: 'Story_Templates', category: 'Story',        key: 'RTNFF',        value: 'Road tested.', tags: '' },
   ];
   api.opcodes = [{ id: 1, code: 'S-T', desc: 'Service Tires', type: 'W' }];
-  check('categories come A to Z, then Story, then OP-Codes',
-        [...api.refGroups().keys()], ['Advisors', 'General', 'Torque Specs', 'Story', 'OP-Codes']);
-  check('a note with no category lands in General', api.refGroups().get('General').length, 1);
+  api.refCategoryGroups = { 'torque specs': 'Car info', 'brakes': 'Car info', 'advisors': 'People' };
+  check('chips are the groups A to Z, then Ungrouped, Stories and OP-Codes',
+        [...api.refChips().keys()], ['Car info', 'People', 'Ungrouped', 'Stories', 'OP-Codes']);
+  check('a group holds its categories, A to Z',
+        [...api.refChips().get('Car info').keys()], ['Brakes', 'Torque Specs']);
+  check('categories with no group wait in Ungrouped',
+        [...api.refChips().get('Ungrouped').keys()], ['General', 'Tools']);
 
-  api.setRefGroup('Torque Specs');
-  check('picking a group shows only that one', api.visibleRefGroups(''), ['Torque Specs']);
+  api.setRefGroup('Car info');
+  check('picking a group shows only that group', api.visibleRef('').map(function (p) { return p[0]; }), ['Car info']);
   check('  ...and clears any search', fields['refSearch'], '');
-
-  check('a search looks in every group, not just the chosen one',
-        api.visibleRefGroups('meagan'), ['Advisors']);
+  check('a search looks in every group',
+        api.visibleRef('meagan').map(function (p) { return p[0]; }), ['People']);
   api.renderRef('meagan');
   check('  ...so the strip goes back to All', api.refGroup, 'All');
 
-  api.setRefGroup('Advisors');
-  api.refNotes = api.refGroups().get('Torque Specs');   // the Advisors group disappears
+  api.setRefGroup('People');
+  api.refCategoryGroups = {};                  // Advisors leaves People, which empties it
   api.renderRef('');
-  check('a group that loses its last note falls back to All', api.refGroup, 'All');
+  check('a group left with no category falls back to All', api.refGroup, 'All');
 
   out.push('\n' + passed + ' passed, ' + failed + ' failed\n');
   return { text: out.join('\n'), failed: failed };
