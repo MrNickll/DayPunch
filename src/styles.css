@@ -1076,3 +1076,41 @@ kbd {
 .ref-type { margin-left: 8px; }
 .opcode-item.is-variant .otag { color: var(--neutral-fg); background: var(--tint-neutral); }
 
+/* ── Reference groups ────────────────────────────────────────────────────── */
+.ref-tabs {
+  display:        flex;
+  gap:            6px;
+  overflow-x:     auto;
+  overflow-y:     hidden;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+}
+.ref-tab {
+  flex:           0 0 auto;
+  display:        flex;
+  align-items:    center;
+  gap:            6px;
+  border:         1px solid var(--border);
+  background:     var(--surface);
+  border-radius:  999px;
+  padding:        4px 10px;
+  font-family:    var(--mono);
+  font-size:      10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color:          var(--muted);
+  white-space:    nowrap;
+  cursor:         pointer;
+  transition:     color 0.15s, border-color 0.15s, background 0.15s;
+}
+.ref-tab:hover  { color: var(--text); border-color: var(--muted2); }
+.ref-tab.active { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.ref-tab.empty  { opacity: 0.45; }
+.ref-tab .n     { font-size: 9px; opacity: 0.7; }
+.ref-empty {
+  color:       var(--muted);
+  font-size:   12px;
+  font-family: var(--mono);
+  padding:     12px 0;
+}
+

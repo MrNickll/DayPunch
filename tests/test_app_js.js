@@ -60,6 +60,7 @@ function main(src) {
     querySelectorAll() { return []; },
     querySelector(sel) { return this._els['sel:' + sel] || (this._els['sel:' + sel] = el(sel)); },
     createElement() { return el('tmp'); },
+    createTextNode(text) { return { nodeValue: text }; },
     addEventListener(t, f) { docBag.add(t, f); },
     removeEventListener(t, f) { docBag.remove(t, f); },
     get title() { return ''; }, set title(v) {},
@@ -90,6 +91,7 @@ function main(src) {
       set resumeSnapshot(v) { resumeSnapshot = v; },
       set resumeRoList(v) { resumeRoList = v; }, get resumeRoList() { return resumeRoList; },
       set opcodes(v) { opcodes = v; }, set templates(v) { templates = v; },
+      set refNotes(v) { refNotes = v; }, get refGroup() { return refGroup; },
       set deferredExternalChange(v) { deferredExternalChange = v; },
       get formDirty() { return formDirty; },
       lastPunchIdx, openPunchIdx, activePunchIdx, isOpenStatus,
@@ -99,6 +101,7 @@ function main(src) {
       checkResumeFromPunches, declineResume, startNewPunch, abandonNewPunch,
       confirmResume, resumePromptOpen,
       selectOpcode, selectVariant, variantsOf, descriptionChoices, deleteRefNote, deleteOpcode,
+      refGroups, visibleRefGroups, setRefGroup, renderRef,
       togglePunchLauncher, closePunchLauncher,
     };`
   )(document, window, navigator, console, fetch, setInterval, clearInterval, setTimeout, toasts,
@@ -437,6 +440,35 @@ function main(src) {
         [document.getElementById('deleteModalTitle').textContent,
          document.getElementById('deleteModalLabel').textContent],
         ['DELETE OP-CODE', 'TRN-A — Training Aston']);
+
+  // A real shop ends up with twenty-odd note categories, most holding one or two
+  // notes, so the groups are chips rather than fixed tabs.
+  out.push('\nReference groups');
+  api.refNotes = [
+    { row: 1, sheet: 'Ref_Notes',       category: 'Torque Specs', key: 'Rear hub nut', value: '200 Nm', tags: 'torque' },
+    { row: 2, sheet: 'Ref_Notes',       category: 'Torque Specs', key: 'Wheel',        value: '175 Nm', tags: 'torque' },
+    { row: 3, sheet: 'Ref_Notes',       category: 'Advisors',     key: 'Meagan',       value: 'ext 2257', tags: '' },
+    { row: 4, sheet: 'Story_Templates', category: 'Story',        key: 'RTNFF',        value: 'Road tested.', tags: '' },
+    { row: 5, sheet: 'Ref_Notes',       category: '',             key: 'Loose note',   value: 'no category', tags: '' },
+  ];
+  api.opcodes = [{ id: 1, code: 'S-T', desc: 'Service Tires', type: 'W' }];
+  check('categories come A to Z, then Story, then OP-Codes',
+        [...api.refGroups().keys()], ['Advisors', 'General', 'Torque Specs', 'Story', 'OP-Codes']);
+  check('a note with no category lands in General', api.refGroups().get('General').length, 1);
+
+  api.setRefGroup('Torque Specs');
+  check('picking a group shows only that one', api.visibleRefGroups(''), ['Torque Specs']);
+  check('  ...and clears any search', fields['refSearch'], '');
+
+  check('a search looks in every group, not just the chosen one',
+        api.visibleRefGroups('meagan'), ['Advisors']);
+  api.renderRef('meagan');
+  check('  ...so the strip goes back to All', api.refGroup, 'All');
+
+  api.setRefGroup('Advisors');
+  api.refNotes = api.refGroups().get('Torque Specs');   // the Advisors group disappears
+  api.renderRef('');
+  check('a group that loses its last note falls back to All', api.refGroup, 'All');
 
   out.push('\n' + passed + ' passed, ' + failed + ' failed\n');
   return { text: out.join('\n'), failed: failed };

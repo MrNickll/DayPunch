@@ -1405,79 +1405,165 @@ function populateRefCatList() {
   document.getElementById('refCatList').innerHTML = cats.map(c => `<option value="${c}">`).join('');
 }
 
+// REF holds three kinds of thing at once -- notes by category, story templates
+// and OP-codes -- and stacking them into one list made it unreadable. A strip of
+// chips filters to one group. Chips rather than fixed tabs: a working shop ends
+// up with twenty-odd categories, most holding one or two notes, and that many
+// tabs would be worse than the list they replace.
+let refGroup = 'All';
+
+function refGroups() {
+  const groups = new Map();
+  refNotes.forEach(n => {
+    const name = (n.category || '').trim() || 'General';
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(n);
+  });
+  // Categories A-Z, then the other two kinds, so the strip keeps the same order
+  // as notes are added and muscle memory survives.
+  const ordered = new Map();
+  [...groups.keys()]
+    .filter(n => n.toLowerCase() !== 'story')
+    .sort((a, b) => a.localeCompare(b))
+    .forEach(n => ordered.set(n, groups.get(n)));
+  const story = [...groups.keys()].find(n => n.toLowerCase() === 'story');
+  if (story) ordered.set(story, groups.get(story));
+  if (opcodes.length) ordered.set('OP-Codes', opcodes);
+  return ordered;
+}
+
+function refMatches(group, item, q) {
+  if (!q) return true;
+  const fields = group === 'OP-Codes'
+    ? [item.code, item.desc, item.type]
+    : [item.category, item.key, item.value, item.tags];
+  return fields.join(' ').toLowerCase().includes(q);
+}
+
+// A search always looks everywhere, so a chip is never left contradicting it:
+// typing switches the strip back to All.
+function visibleRefGroups(q) {
+  const groups = refGroups();
+  const names = (q || refGroup === 'All') ? [...groups.keys()] : [refGroup];
+  return names.filter(name => (groups.get(name) || []).some(it => refMatches(name, it, q)));
+}
+
+function setRefGroup(name) {
+  refGroup = name;
+  document.getElementById('refSearch').value = '';   // a chip and a query never fight
+  renderRef('');
+}
+
+function refNoteEl(note) {
+  const el = document.createElement('div');
+  el.className = 'ref-item';
+  const key = document.createElement('span');
+  key.className = 'ref-key';
+  key.textContent = note.key;
+  el.append(key);
+  if (note.sheet !== 'Story_Templates' && note.value) {
+    el.append(document.createTextNode(' — ' + note.value));
+  }
+  el.addEventListener('contextmenu', e => showRefContextMenu(e, el, note));
+  el.addEventListener('click', () => {
+    navigator.clipboard.writeText(note.value || note.key);
+    showToast('Copied: ' + note.key);
+  });
+  return el;
+}
+
+function refOpcodeEl(oc) {
+  const el = document.createElement('div');
+  el.className = 'ref-item';
+  const key = document.createElement('span');
+  key.className = 'ref-key';
+  key.textContent = oc.code || '—';
+  el.append(key, document.createTextNode(' — ' + oc.desc));
+  if (oc.type) {
+    const badge = document.createElement('span');
+    badge.className = 'ref-type';
+    badge.textContent = oc.type;
+    el.append(badge);
+  }
+  el.addEventListener('contextmenu', e => showRefContextMenu(e, el, { kind: 'opcode', ...oc }));
+  el.addEventListener('click', () => {
+    if (!oc.code) return;
+    navigator.clipboard.writeText(oc.code);
+    showToast('Copied: ' + oc.code);
+  });
+  return el;
+}
+
+function renderRefTabs(groups, q) {
+  const strip = document.getElementById('refTabs');
+  strip.innerHTML = '';
+  const counts = new Map();
+  let total = 0;
+  groups.forEach((items, name) => {
+    const n = items.filter(it => refMatches(name, it, q)).length;
+    counts.set(name, n);
+    total += n;
+  });
+
+  const chip = (name, count) => {
+    const b = document.createElement('button');
+    b.className = 'ref-tab'
+      + (refGroup === name ? ' active' : '')
+      + (count ? '' : ' empty');
+    b.type = 'button';
+    const label = document.createElement('span');
+    label.textContent = name;
+    const badge = document.createElement('span');
+    badge.className = 'n';
+    badge.textContent = count;
+    b.append(label, badge);
+    b.addEventListener('click', () => setRefGroup(name));
+    return b;
+  };
+
+  strip.append(chip('All', total));
+  groups.forEach((items, name) => strip.append(chip(name, counts.get(name))));
+}
+
 function renderRef(query) {
   const container = document.getElementById('refContent');
+  const q = (query || '').toLowerCase().trim();
+  const groups = refGroups();
+
+  // A group can disappear when its last note goes.
+  if (refGroup !== 'All' && !groups.has(refGroup)) refGroup = 'All';
+  if (q) refGroup = 'All';
+
+  renderRefTabs(groups, q);
   container.innerHTML = '';
-  const q = query.toLowerCase().trim();
 
   if (!refNotes.length && !opcodes.length) {
-    container.innerHTML = '<div style="color:var(--muted);font-size:12px;font-family:var(--mono);padding:12px 0">No reference notes or OP-codes yet.</div>';
+    container.innerHTML = '<div class="ref-empty">No reference notes or OP-codes yet.</div>';
     return;
   }
 
-  const grouped = {};
-  refNotes.forEach(n => {
-    const cat = n.category || 'General';
-    if (!grouped[cat]) grouped[cat] = [];
-    const searchable = [n.category, n.key, n.value, n.tags].join(' ').toLowerCase();
-    if (!q || searchable.includes(q)) grouped[cat].push(n);
-  });
-
-  for (const [cat, items] of Object.entries(grouped)) {
-    if (!items.length) continue;
-    const catEl = document.createElement('div');
-    catEl.className = 'ref-category';
-    catEl.innerHTML = `<div class="ref-category-title">${cat}</div>`;
-    items.forEach(item => {
-      const el = document.createElement('div');
-      el.className = 'ref-item';
-      const isStory = item.sheet === 'Story_Templates';
-      el.innerHTML = isStory
-        ? `<span class="ref-key">${item.key}</span>`
-        : `<span class="ref-key">${item.key}</span>${item.value ? ' — ' + item.value : ''}`;
-      el.addEventListener('contextmenu', (e) => showRefContextMenu(e, el, item));
-      el.addEventListener('click', () => {
-        navigator.clipboard.writeText(item.value || item.key);
-        showToast('Copied: ' + item.key);
-      });
-      catEl.appendChild(el);
-    });
-    container.appendChild(catEl);
+  const names = visibleRefGroups(q);
+  if (!names.length) {
+    container.innerHTML = '<div class="ref-empty">Nothing matches.</div>';
+    return;
   }
 
-  // OP-codes, editable the same way as notes: right-click to edit or delete.
-  const codes = opcodes.filter(o =>
-    !q || [o.code, o.desc, o.type].join(' ').toLowerCase().includes(q));
-  if (codes.length) {
+  // The heading only earns its place when more than one group is on screen;
+  // with a single group the chip above already says which.
+  const withHeadings = names.length > 1;
+  names.forEach(name => {
+    const items = groups.get(name).filter(it => refMatches(name, it, q));
     const catEl = document.createElement('div');
     catEl.className = 'ref-category';
-    const title = document.createElement('div');
-    title.className = 'ref-category-title';
-    title.textContent = 'OP-Codes';
-    catEl.append(title);
-    codes.forEach(o => {
-      const el = document.createElement('div');
-      el.className = 'ref-item';
-      const key = document.createElement('span');
-      key.className = 'ref-key';
-      key.textContent = o.code || '—';
-      el.append(key, document.createTextNode(' — ' + o.desc));
-      if (o.type) {
-        const badge = document.createElement('span');
-        badge.className = 'ref-type';
-        badge.textContent = o.type;
-        el.append(badge);
-      }
-      el.addEventListener('contextmenu', e => showRefContextMenu(e, el, { kind: 'opcode', ...o }));
-      el.addEventListener('click', () => {
-        if (!o.code) return;
-        navigator.clipboard.writeText(o.code);
-        showToast('Copied: ' + o.code);
-      });
-      catEl.append(el);
-    });
+    if (withHeadings) {
+      const title = document.createElement('div');
+      title.className = 'ref-category-title';
+      title.textContent = name;
+      catEl.append(title);
+    }
+    items.forEach(it => catEl.append(name === 'OP-Codes' ? refOpcodeEl(it) : refNoteEl(it)));
     container.append(catEl);
-  }
+  });
 }
 
 function filterRef() {
@@ -1528,7 +1614,8 @@ function openRefModal(noteObj, anchorEl) {
   document.getElementById('refModalTitle').textContent = noteObj ? 'EDIT NOTE' : 'ADD NOTE';
   document.getElementById('ref-edit-row').value        = noteObj ? noteObj.row   : '';
   document.getElementById('ref-edit-sheet').value      = noteObj ? (noteObj.sheet || 'Ref_Notes') : '';
-  document.getElementById('ref-cat').value             = noteObj ? noteObj.category : '';
+  const preset = (!refGroup || refGroup === 'All' || refGroup === 'OP-Codes') ? '' : refGroup;
+  document.getElementById('ref-cat').value             = noteObj ? noteObj.category : preset;
   document.getElementById('ref-key').value             = noteObj ? noteObj.key      : '';
   document.getElementById('ref-val').value             = noteObj ? noteObj.value    : '';
   document.getElementById('ref-tags').value            = noteObj ? noteObj.tags     : '';
